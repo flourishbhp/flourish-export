@@ -1,0 +1,76 @@
+{% extends 'flourish_export/base.html' %}
+{% load staticfiles %}
+{% load static %}
+
+{% block scripts %}
+{{ block.super }}
+
+<scripts>
+$(document).ready(function() {
+    $('#example').DataTable(
+        
+         {     
+
+      "aLengthMenu": [[5, 10, 25, -1], [5, 10, 25, "All"]],
+        "iDisplayLength": 5
+       } 
+        );
+} );
+
+
+function checkAll(bx) {
+  var cbs = document.getElementsByTagName('input');
+  for(var i=0; i < cbs.length; i++) {
+    if(cbs[i].type == 'checkbox') {
+      cbs[i].checked = bx.checked;
+    }
+  }
+}
+</scripts>
+
+{% endblock scripts %}
+
+
+{% block main %}
+
+<style>
+
+.bg-1 {
+    background-color: #428bca; /* dark blue */
+    color: #ffffff;
+}
+.bg-2 {
+    background-color: #5bc0de; /* light Blue */
+    color: #ffffff;
+}
+.bg-3 {
+    background-color: #f9f9f9; /* White */
+    color: #555555;
+}
+table{
+    width:100%;
+}
+#example_filter{
+    float:right;
+}
+#example_paginate{
+    float:right;
+}
+label {
+    display: inline-flex;
+    margin-bottom: .5rem;
+    margin-top: .5rem;
+   
+}
+
+</style>
+
+
+{{ block.super }}
+
+<div class="container bg-3 text-center">
+	
+ 
+</div>
+
+{% endblock main %}
