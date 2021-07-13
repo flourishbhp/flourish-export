@@ -48,7 +48,7 @@ caregiver_model_list = [
 caregiver_many_to_many_crf = [
   ['arvsprepregnancy', 'prior_arv', 'priorarv'],
   ['maternaldiagnoses', 'who', 'wcsdxadult'],
-  ['medicalhistory', 'caregiver_chronic', 'chronicConditions',]
+  ['medicalhistory', 'caregiver_chronic', 'chronicConditions',],
   ['medicalhistory', 'who', 'wcsdxadult',]
   ['medicalhistory', 'caregiver_medications', 'caregiverMedications',]
 ]
