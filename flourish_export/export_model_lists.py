@@ -27,7 +27,6 @@ caregiver_crfs_list = [
   'caregiverhamdreferral',
   'caregiverphqdeprscreening',
   'caregiverphqreferral',
-  'caregiverpreviouslyenrolled',
   'foodsecurityquestionnaire',
   'hivdisclosurestatusa',
   'hivdisclosureStatusb',
@@ -37,7 +36,7 @@ caregiver_crfs_list = [
   'hivviralloadandcd4',
   'maternalarvduringpreg',
   'maternaldiagnoses',
-  'maternalivInterimHx',
+  # 'maternalivInterimHx',
   'Maternalinterimidcc',
   'medicalhistory',
   'obstericalhistory',
@@ -52,13 +51,13 @@ caregiver_crfs_list = [
 
 caregiver_inlines_dict = {
   'cliniciannotes': [['cliniciannotesimage'], 'clinician_notes_id'],
-  'maternalarvduringpreg': [['maternalarv'], 'maternal_arv_durg_preg_id']
+  #'maternalarvduringpreg': [['maternalarv'], 'maternal_arv_durg_preg_id']
 }
 
 caregiver_model_list = [
   'antenatalEnrollment', 'caregiverchildconsent', 'caregiverlocator',
   'caregiverpreviouslyenrolled', 'flourishconsentversion',
-  'inpersoncontactAttempt', 'maternaldelivery', 'maternalarv'
+  'maternaldelivery', 'caregiverpreviouslyenrolled', # 'maternalarv', 
 ]
 
 caregiver_many_to_many_crf = [

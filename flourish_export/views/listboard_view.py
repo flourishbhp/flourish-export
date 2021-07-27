@@ -1,4 +1,3 @@
-from datetime import timedelta
 import datetime
 import re
 import threading
@@ -86,7 +85,6 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
                     name=thread_name, target=thread_target,
                     daemon=True)
                 download_thread.start()
-
                 last_doc = ExportFile.objects.filter(
                     study=study_name,
                     download_complete=True).order_by('created').last()

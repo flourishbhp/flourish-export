@@ -18,10 +18,8 @@ class ExportMethods:
     """
 
     def __init__(self):
-        self.antenatal_enrollment_cls = django_apps.get_model('flourish_caregiver.antenatalenrollment')
         self.rs_cls = django_apps.get_model('edc_registration.registeredsubject')
         self.subject_consent_csl = django_apps.get_model('flourish_caregiver.subjectconsent')
-        self.subject_screening_csl = django_apps.get_model('flourish_caregiver.subjectscreening')
 
     def encrypt_values(self, obj_dict=None, obj_cls=None):
         """Ecrypt values for fields that are encypted.
@@ -80,12 +78,6 @@ class ExportMethods:
             appt_datetime=crf_obj.maternal_visit.appointment.appt_datetime,
         )
         try:
-            ae = self.antenatal_enrollment_cls.objects.get(subject_identifier=crf_obj.maternal_visit.subject_identifier)
-        except self.antenatal_enrollment_cls.DoesNotExist:
-            raise ValidationError('AntenatalEnrollment can not be missing')
-        else:
-            data.update(enrollment_hiv_status=ae.current_hiv_status)
-        try:
             rs = self.rs_cls.objects.get(subject_identifier=crf_obj.maternal_visit.subject_identifier)
         except self.rs_cls.DoesNotExist:
             raise ValidationError('RegisteredSubject can not be missing')
@@ -118,9 +110,11 @@ class ExportMethods:
             appt_status=crf_obj.child_visit.appointment.appt_status,
             appt_datetime=crf_obj.child_visit.appointment.appt_datetime,
         )
+
         try:
             rs = self.rs_cls.objects.get(subject_identifier=crf_obj.child_visit.subject_identifier)
         except self.rs_cls.DoesNotExist:
+            
             raise ValidationError('RegisteredSubject can not be missing')
         else:
             data.update(
@@ -148,15 +142,6 @@ class ExportMethods:
                 data.update(gender=subject_consent.gender)
             if 'screening_identifier' not in data:
                 data.update(screening_identifier=subject_consent.screening_identifier)
-            try:
-                subject_screening = self.subject_screening_csl.objects.get(
-                    screening_identifier=subject_consent.screening_identifier)
-            except self.subject_screening_csl.DoesNotExist:
-                raise ValidationError('Subject Screening can not be missing')
-            else:
-                data.update(
-                    screening_age_in_years=subject_screening.age_in_years
-                )
         else:
             if 'screening_identifier' not in data:
                 data.update(screening_identifier=None)
@@ -164,7 +149,7 @@ class ExportMethods:
                 screening_age_in_years=None,
                 dob=None,
                 gender=None,
-
+                
             )
         if 'registration_datetime' not in data:
             try:

@@ -26,7 +26,6 @@ class ListBoardViewMixin:
     def export_caregiver_data(self, export_path=None):
             """Export all caregiver CRF data.
             """
-
             export_crf_data = ExportDataMixin(export_path=export_path)
             export_crf_data.export_crfs(
                 crf_list=caregiver_crfs_list,
@@ -78,7 +77,7 @@ class ListBoardViewMixin:
     def download_all_data(self):
         """Export all data.
         """
-
+        
         export_identifier = self.identifier_cls().identifier
 
         last_doc = ExportFile.objects.filter(
@@ -96,9 +95,8 @@ class ListBoardViewMixin:
             'download_time': download_time
         }
         doc = ExportFile.objects.create(**options)
-
         try:
-            start = time.clock()
+            start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
             zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
@@ -106,19 +104,18 @@ class ListBoardViewMixin:
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
-
             export_path = dir_to_zip + '/child/'
             self.export_child_data(export_path=export_path)
-
+            
             export_path = dir_to_zip + '/non_crf/'
             self.export_non_crf_data(export_path=export_path)
-
-            caregiver_export_path = dir_to_zip + '/caregiver/'
-            child_export_path = dir_to_zip + '/child/'
-
-            self.export_requisitions(
-                caregiver_export_path=caregiver_export_path,
-                child_export_path=child_export_path)
+            
+            # caregiver_export_path = dir_to_zip + '/caregiver/'
+            # child_export_path = dir_to_zip + '/child/'
+            #
+            # self.export_requisitions(
+                # caregiver_export_path=caregiver_export_path,
+                # child_export_path=child_export_path)
 
             doc.document = zipped_file_path
             doc.save()
@@ -139,6 +136,8 @@ class ListBoardViewMixin:
                 print(e)
             else:
                 del_doc.delete()
+            print(e, '#####################################  IJO mathata again')
+            raise e
 
     def zipfile(
             self, dir_to_zip=None, start=None,
@@ -154,7 +153,7 @@ class ListBoardViewMixin:
             shutil.make_archive(dir_to_zip, 'zip', dir_to_zip)
             # Create a document object.
 
-            end = time.clock()
+            end = time.perf_counter()
             download_time = end - start
             try:
                 doc = ExportFile.objects.get(

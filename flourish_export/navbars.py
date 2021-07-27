@@ -11,7 +11,7 @@ flourish_export.append_item(
         name='export_data',
         title='Export Data',
         label='flourish Export Data',
-        fa_icon='fa fa-file-export',
+        fa_icon='fa fa-database',
         url_name=settings.DASHBOARD_URL_NAMES[
             'export_listboard_url'],
         no_url_namespace=no_url_namespace))

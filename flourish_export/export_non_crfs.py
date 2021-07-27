@@ -21,7 +21,6 @@ class ExportNonCrfData:
     def caregiver_non_crfs(self, caregiver_model_list=None, exclude=None):
         """E.
         """
-
         for model_name in caregiver_model_list:
             if 'registeredsubject' == model_name:
                 model_cls = self.rs_cls
@@ -32,19 +31,19 @@ class ExportNonCrfData:
             objs = model_cls.objects.all()
             count = 0
             models_data = []
-            for obj in objs:
-                if not obj.subject_identifier[-3:] == '-10':
-                    data = self.export_methods_cls.fix_date_format(self.export_methods_cls.non_crf_obj_dict(obj=obj))
-                    if exclude:
-                        exclude_fields.append(exclude)
 
-                    for e_fields in exclude_fields:
-                        try:
-                            del data[e_fields]
-                        except KeyError:
-                            pass
-                    models_data.append(data)
-                    count += 1
+            for obj in objs:
+                data = self.export_methods_cls.fix_date_format(self.export_methods_cls.non_crf_obj_dict(obj=obj))
+                if exclude:
+                    exclude_fields.append(exclude)
+                    
+                for e_fields in exclude_fields:
+                    try:
+                        del data[e_fields]
+                    except KeyError:
+                        pass
+                models_data.append(data)
+                count += 1
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             fname = 'flourish_caregiver_' + model_name + '_' + timestamp + '.csv'
             final_path = self.export_path + fname
@@ -58,7 +57,7 @@ class ExportNonCrfData:
         """
 
         for crf_infor in caregiver_many_to_many_non_crf:
-            crf_name, mm_field, _ = crf_infor
+            crf_name, mm_field = crf_infor
             crf_cls = django_apps.get_model('flourish_caregiver', crf_name)
             count = 0
             mergered_data = []
@@ -99,7 +98,6 @@ class ExportNonCrfData:
     def child_non_crf(self, child_model_list=None):
         """.
         """
-
         for model_name in child_model_list:
             model_cls = django_apps.get_model('flourish_child', model_name)
             objs = model_cls.objects.all()
@@ -111,7 +109,15 @@ class ExportNonCrfData:
                 try:
                     rs = self.rs_cls.objects.get(subject_identifier=obj.subject_identifier)
                 except self.rs_cls.DoesNotExist:
-                    raise ValidationError('Registered subject can not be missing')
+                    if not 'dob' in data:
+                        data.update(dob=None)
+                    if not 'gender' in data:
+                        data.update(gender=None)
+                    data.update(
+                        relative_identifier=None,
+                        screening_age_in_years=None,
+                        registration_datetime=None
+                    )
                 else:
                     if not 'dob' in data:
                         data.update(dob=rs.dob)
@@ -182,7 +188,6 @@ class ExportNonCrfData:
 
     def death_report(self, death_report_prn_model_list=None):
         # Export child Non CRF data
-
         for model_name in death_report_prn_model_list:
             model_cls = django_apps.get_model('flourish_prn', model_name)
             objs = model_cls.objects.all()
