@@ -20,7 +20,6 @@ class ExportDataMixin:
 
         """Export crf data.
         """
-        print(crf_list, 'CRF list is here, check it out $$$$$$$$$$$$$$$$$$$$$$$$')
         for crf_name in crf_list:
             crf_cls = django_apps.get_model(study, crf_name)
             objs = crf_cls.objects.all()

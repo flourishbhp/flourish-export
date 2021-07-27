@@ -136,7 +136,6 @@ class ListBoardViewMixin:
                 print(e)
             else:
                 del_doc.delete()
-            print(e, '#####################################  IJO mathata again')
             raise e
 
     def zipfile(
