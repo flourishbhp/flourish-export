@@ -7,6 +7,12 @@ no_url_namespace = True if settings.APP_NAME == 'flourish_export' else False
 flourish_export = Navbar(name='flourish_export')
 
 flourish_export.append_item(
+    NavbarItem(name='study_data_export',
+               label='Data Export',
+               fa_icon='fa-cogs',
+               url_name='flourish_export:home_url'))
+
+flourish_export.append_item(
     NavbarItem(
         name='export_data',
         title='Export Data',
@@ -15,6 +21,5 @@ flourish_export.append_item(
         url_name=settings.DASHBOARD_URL_NAMES[
             'export_listboard_url'],
         no_url_namespace=no_url_namespace))
-
 
 site_navbars.register(flourish_export)

@@ -1,75 +1,119 @@
-{% extends 'flourish_export/base.html' %}
+{% extends 'edc_base/base.html' %}
+
 {% load static %}
+{% load crispy_forms_tags %}
+{% load follow_extras %}
+{% block extra-scripts %}
+	{{ block.super }}
+	<script src="https://cdn.datatables.net/1.10.13/js/jquery.dataTables.min.js"></script>
+	<script src="https://cdn.datatables.net/1.10.13/js/dataTables.bootstrap.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.13/css/dataTables.bootstrap.min.css">
+	<script type="text/javascript">
+	$(document).ready(function() {
+	    $('#missing-crfs').DataTable({
+	    	"ordering": false
+	    });
+	} );
+	</script>
 
-{% block scripts %}
-{{ block.super }}
+	<script type="text/javascript">
 
-<scripts>
-$(document).ready(function() {
-    $('#example').DataTable(
-        
-         {     
-
-      "aLengthMenu": [[5, 10, 25, -1], [5, 10, 25, "All"]],
-        "iDisplayLength": 5
-       } 
-        );
-} );
-
-
-function checkAll(bx) {
-  var cbs = document.getElementsByTagName('input');
-  for(var i=0; i < cbs.length; i++) {
-    if(cbs[i].type == 'checkbox') {
-      cbs[i].checked = bx.checked;
-    }
-  }
-}
-</scripts>
-
-{% endblock scripts %}
-
+	  jQuery(function() {
+	    jQuery('#users').change(function() {
+	        this.form.submit();
+	    });
+	});
+	</script>
+{% endblock extra-scripts %}
 
 {% block main %}
+<div class="container">
+   <div class="row">
+    
+    <p></p>
+    <h1>Study data export</h1>
+    <p>Generate and download study data sets from the tables below.</p>
+    <p> </p><p> </p>
+    
+        <div class="col-md-10 col-md-offset-1">
 
-<style>
-
-.bg-1 {
-    background-color: #428bca; /* dark blue */
-    color: #ffffff;
-}
-.bg-2 {
-    background-color: #5bc0de; /* light Blue */
-    color: #ffffff;
-}
-.bg-3 {
-    background-color: #f9f9f9; /* White */
-    color: #555555;
-}
-table{
-    width:100%;
-}
-#example_filter{
-    float:right;
-}
-#example_paginate{
-    float:right;
-}
-label {
-    display: inline-flex;
-    margin-bottom: .5rem;
-    margin-top: .5rem;
-   
-}
-
-</style>
-
-
-{{ block.super }}
-
-<div class="container bg-3 text-center">
-	
+<div class="panel panel-default panel-table">
+  <div class="panel-heading">
+    <div class="row">
+      <div class="col col-xs-6">
+        <h3 class="panel-title">Non CRF Data Export</h3>
+      </div>
+      <div class="col col-xs-6 text-right">
+        <button type="button" class="btn btn-sm btn-primary btn-create">Generate Export</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel-body">
  
-</div>
+    <table id="non_crf_export" class="table table-striped table-bordered table-list">
+		<thead>
+			<tr>
+				<th>Export identifier</th>
+				<th>Document</th>
+				<th>Report data range</th>
+				<th>Datetime generated</th>
+			</tr>
+		</thead>
+		<tfoot>
+			<tr>
+				<th>Export identifier</th>
+				<th>Document</th>
+				<th>Report data range</th>
+				<th>Datetime generated</th>
+			</tr>
+		</tfoot>
+		<tbody>
+		<tr>
+			<td>test data</td>
+			<td>test data</td>
+			<td>test data</td>
+			<td>test data</td>
+		</tr>
+		{% for download in recruitment_downloads %}
+			<tr>
+				<td>{{ download.export_identifier }}</td>
+		 		<td>
+		 			{% if download.document.url %}
+		 				<a href={{ download.file_url }}><i class="fa fa-download fa-sm"></i> file download</a>
+		 			{% endif %}
+		 		</td>
+		 		<td>{{ download.start_date }} & {{ download.end_date }}</td>
+		 		<td>{{ download.uploaded_at }}</td>
+			</tr>
+		{% endfor %}
+		</tbody>
+	</table>
 
+  </div>
+  <div class="panel-footer">
+    <div class="row">
+      <div class="col col-xs-4">Page 1 of 5
+      </div>
+      <div class="col col-xs-8">
+        <ul class="pagination hidden-xs pull-right">
+          <li><a href="#">1</a></li>
+          <li><a href="#">2</a></li>
+          <li><a href="#">3</a></li>
+          <li><a href="#">4</a></li>
+          <li><a href="#">5</a></li>
+        </ul>
+        <ul class="pagination visible-xs pull-right">
+            <li><a href="#">«</a></li>
+            <li><a href="#">»</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>            
+            {% include "flourish_export/caregiver_crf_export.html" %}
+            {% include "flourish_export/child_crf_export.html" %}
+
+		</div>
+	</div>
+</div>
 {% endblock main %}

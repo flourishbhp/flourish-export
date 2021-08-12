@@ -55,7 +55,7 @@ caregiver_inlines_dict = {
 }
 
 caregiver_model_list = [
-  'antenatalEnrollment', 'caregiverchildconsent', 'caregiverlocator',
+  'antenatalEnrollment', 'caregiverchildconsent',
   'caregiverpreviouslyenrolled', 'flourishconsentversion',
   'maternaldelivery', 'caregiverpreviouslyenrolled', # 'maternalarv', 
 ]
