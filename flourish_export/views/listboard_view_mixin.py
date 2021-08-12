@@ -81,15 +81,15 @@ class ListBoardViewMixin:
         export_identifier = self.identifier_cls().identifier
 
         last_doc = ExportFile.objects.filter(
-            study='flourish', download_complete=True).order_by(
+            description='Flourish All Export', download_complete=True).order_by(
                 'created').last()
         
         if last_doc:
             download_time = last_doc.download_time
         else:
-            download_time = None
+            download_time = 0.0
         options = {
-            'description': 'Flourish Export',
+            'description': 'Flourish All Export',
             'study': 'flourish',
             'export_identifier': export_identifier,
             'download_time': download_time
@@ -127,16 +127,139 @@ class ListBoardViewMixin:
                 export_identifier=export_identifier,
                 doc=doc, study='flourish')
         except Exception as e:
-            try:
-                del_doc = ExportFile.objects.get(
-                    description='Flourish Export',
-                    study='flourish',
-                    export_identifier=export_identifier)
-            except ExportFile.DoesNotExist:
-                print(e)
-            else:
-                del_doc.delete()
             raise e
+
+    def download_child_data(self):
+        """Export all data.
+        """
+        
+        export_identifier = self.identifier_cls().identifier
+
+        last_doc = ExportFile.objects.filter(
+            description='Flourish Child CRF Export', download_complete=True).order_by(
+                'created').last()
+        
+        if last_doc:
+            download_time = last_doc.download_time
+        else:
+            download_time = 0.0
+        options = {
+            'description': 'Flourish Child CRF Export',
+            'study': 'flourish',
+            'export_identifier': export_identifier,
+            'download_time': download_time
+        }
+        doc = ExportFile.objects.create(**options)
+        try:
+            start = time.perf_counter()
+            today_date = datetime.datetime.now().strftime('%Y%m%d')
+
+            zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
+            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_export_' + today_date
+
+            export_path = dir_to_zip + '/child/'
+            self.export_child_data(export_path=export_path)
+
+            doc.document = zipped_file_path
+            doc.save()
+
+            # Zip the file
+
+            self.zipfile(
+                dir_to_zip=dir_to_zip, start=start,
+                export_identifier=export_identifier,
+                doc=doc, study='flourish')
+        except Exception as e:
+            raise e
+
+    def download_caregiver_data(self):
+        """Export caregiver data.
+        """
+        
+        export_identifier = self.identifier_cls().identifier
+
+        last_doc = ExportFile.objects.filter(
+            description='Flourish Caregiver CRF Export', download_complete=True).order_by(
+                'created').last()
+        
+        if last_doc:
+            download_time = last_doc.download_time
+        else:
+            download_time = 0.0
+        options = {
+            'description': 'Flourish Caregiver CRF Export',
+            'study': 'flourish',
+            'export_identifier': export_identifier,
+            'download_time': download_time
+        }
+        doc = ExportFile.objects.create(**options)
+        try:
+            start = time.perf_counter()
+            today_date = datetime.datetime.now().strftime('%Y%m%d')
+
+            zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
+            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_export_' + today_date
+
+            export_path = dir_to_zip + '/caregiver/'
+            self.export_caregiver_data(export_path=export_path)
+
+            doc.document = zipped_file_path
+            doc.save()
+
+            # Zip the file
+
+            self.zipfile(
+                dir_to_zip=dir_to_zip, start=start,
+                export_identifier=export_identifier,
+                doc=doc, study='flourish')
+        except Exception as e:
+            raise e
+    
+    
+    def download_non_crf_data(self):
+        """Export all data.
+        """
+        
+        export_identifier = self.identifier_cls().identifier
+
+        last_doc = ExportFile.objects.filter(
+            description='Flourish Non CRF Export',
+            download_complete=True).order_by('created').last()
+        
+        if last_doc:
+            download_time = last_doc.download_time
+        else:
+            download_time = 0.0
+        options = {
+            'description': 'Flourish Non CRF Export',
+            'study': 'flourish',
+            'export_identifier': export_identifier,
+            'download_time': download_time
+        }
+        doc = ExportFile.objects.create(**options)
+        try:
+            start = time.perf_counter()
+            today_date = datetime.datetime.now().strftime('%Y%m%d')
+
+            zipped_file_path = 'documents/' + export_identifier + '_flourish_non_crf_export_' + today_date + '.zip'
+            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_non_crf_export_' + today_date
+
+            
+            export_path = dir_to_zip + '/non_crf/'
+            self.export_non_crf_data(export_path=export_path)
+
+            doc.document = zipped_file_path
+            doc.save()
+
+            # Zip the file
+
+            self.zipfile(
+                dir_to_zip=dir_to_zip, start=start,
+                export_identifier=export_identifier,
+                doc=doc, study='flourish')
+        except Exception as e:
+            raise e
+
 
     def zipfile(
             self, dir_to_zip=None, start=None,
@@ -177,10 +300,10 @@ class ListBoardViewMixin:
                 fail_silently=False)
             threading.Thread(target=self.stop_main_thread)
 
-    def is_clean(self, study_name):
+    def is_clean(self, description=None):
 
         current_file = ExportFile.objects.filter(
-            study=study_name,
+            description=description,
             download_complete=False).order_by('created').last()
         if current_file:
             time_now = (get_utcnow() - current_file.created).total_seconds()
@@ -191,15 +314,11 @@ class ListBoardViewMixin:
                     ('Download that was initiated is still running '
                      'please wait until an export is fully prepared.'))
                 return False
-            else:
-                current_file.delete()
 
         # Delete any other extra failed files
-        docs = ExportFile.objects.filter(download_complete=False,)
+        docs = ExportFile.objects.filter(download_complete=False)
         for doc in docs:
-            time = (get_utcnow() - doc.created).total_seconds()
-
-            if doc.download_time < time:
+            if doc.created.date() < get_utcnow().date():
                 doc.delete()
         return True
 

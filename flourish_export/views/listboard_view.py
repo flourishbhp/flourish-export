@@ -6,9 +6,10 @@ import time
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from django.db.models.constants import LOOKUP_SEP
 from django.utils.decorators import method_decorator
-from edc_base.view_mixins import EdcBaseViewMixin
 
+from edc_base.view_mixins import EdcBaseViewMixin
 from edc_dashboard.view_mixins import ListboardFilterViewMixin, SearchFormViewMixin
 from edc_dashboard.views import ListboardView
 from edc_navbar import NavbarViewMixin
@@ -35,6 +36,7 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
     ordering = '-modified'
     paginate_by = 10
     search_form_url = 'export_listboard_url'
+    description_queryset_lookups = []
 
     @method_decorator(login_required)
     def dispatch(self, *args, **kwargs):
@@ -56,15 +58,15 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
         download = self.request.GET.get('download')
 
         if download == '1':
-            self.generate_export(thread_name='flourish_export',
+            self.generate_export(thread_name='flourish_all_export',
                                  thread_target=self.download_all_data,
-                                 study_name='flourish')
+                                 description='Flourish All Export')
 
         context.update(export_add_url=self.model_cls().get_absolute_url())
         return context
 
     def generate_export(self, thread_name=None, active_download=False,
-                        thread_target=None, study_name=None):
+                        thread_target=None, description=None):
 
         threads = threading.enumerate()
 
@@ -78,7 +80,7 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
                          'please wait until an export is fully prepared.'))
 
         if not active_download:
-            is_clean = self.is_clean(study_name=study_name)
+            is_clean = self.is_clean(description=description)
             if is_clean:
 
                 download_thread = threading.Thread(
@@ -86,7 +88,7 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
                     daemon=True)
                 download_thread.start()
                 last_doc = ExportFile.objects.filter(
-                    study=study_name,
+                    description=description,
                     download_complete=True).order_by('created').last()
 
                 if last_doc:
@@ -109,9 +111,25 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
 
     def get_queryset_filter_options(self, request, *args, **kwargs):
         options = super().get_queryset_filter_options(request, *args, **kwargs)
+        options = self.add_description_filter_options(
+                options=options, **kwargs)
         if kwargs.get('export_identifier'):
             options.update(
                 {'export_identifier': kwargs.get('export_identifier')})
+        return options
+
+    @property
+    def description_lookup_prefix(self):
+        description_lookup_prefix = LOOKUP_SEP.join(self.description_queryset_lookups)
+        return f'{description_lookup_prefix}__' if description_lookup_prefix else ''
+
+    def add_description_filter_options(self, options=None, **kwargs):
+        """Updates the filter options to limit the description for all data
+        download.
+        """
+        description = 'Flourish All Export'
+        options.update(
+            {f'{self.description_lookup_prefix}description': description})
         return options
 
     def extra_search_options(self, search_term):
