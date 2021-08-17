@@ -315,7 +315,7 @@ class ListBoardViewMixin:
             if time_now <= current_file.download_time:
                 messages.add_message(
                     self.request, messages.INFO,
-                    ('Download that was initiated is still running '
+                    (f'Download for {description} that was initiated is still running '
                      'please wait until an export is fully prepared.'))
                 return False
 

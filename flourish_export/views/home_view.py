@@ -73,7 +73,7 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
                     active_download = True
                     messages.add_message(
                         self.request, messages.INFO,
-                        ('Download that was initiated is still running '
+                        (f'Download for {description} that was initiated is still running '
                          'please wait until an export is fully prepared.'))
 
         if not active_download:
@@ -96,12 +96,12 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
 
                     messages.add_message(
                         self.request, messages.INFO,
-                        ('Download initiated, you will receive an email once '
+                        (f'Download for {description}has been initiated, you will receive an email once '
                          'the download is completed. Estimated download time: '
                          f'{last_doc_time} minutes, file generation started at:'
                          f' {start_time}'))
                 else:
                     messages.add_message(
                         self.request, messages.INFO,
-                        ('Download initiated, you will receive an email once '
+                        (f'Download for {description} initiated, you will receive an email once '
                          'the download is completed.'))
