@@ -42,14 +42,14 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
-    def stop_main_thread(self):
+    def stop_main_thread(self, thread_name):
         """Stop export file generation thread.
         """
         time.sleep(20)
         threads = threading.enumerate()
         threads = [t for t in threads if t.is_alive()]
         for thread in threads:
-            if thread.name == 'flourish_export':
+            if thread.name == thread_name:
                 thread._stop()
 
     def get_context_data(self, **kwargs):

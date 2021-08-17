@@ -36,6 +36,16 @@ class ExportFileAdmin(ModelAdminMixin, admin.ModelAdmin):
         (None, {
             'fields': (
                 'description',
-                'document',)}),
+                'document',
+                'study',
+                'download_time',
+                'download_complete')}),
         audit_fieldset_tuple
     )
+
+    search_fields = ['export_identifier']
+
+    list_display = ('export_identifier', 'description', 'download_time',
+                    'download_complete',)
+
+    list_filter = ('download_complete', 'description',)

@@ -79,7 +79,7 @@ class ListBoardViewMixin:
         """
         
         export_identifier = self.identifier_cls().identifier
-
+        thread_name = 'flourish_all_export'
         last_doc = ExportFile.objects.filter(
             description='Flourish All Export', download_complete=True).order_by(
                 'created').last()
@@ -123,9 +123,10 @@ class ListBoardViewMixin:
             # Zip the file
 
             self.zipfile(
+                thread_name=thread_name,
                 dir_to_zip=dir_to_zip, start=start,
                 export_identifier=export_identifier,
-                doc=doc, study='flourish')
+                doc=doc)
         except Exception as e:
             raise e
 
@@ -134,7 +135,7 @@ class ListBoardViewMixin:
         """
         
         export_identifier = self.identifier_cls().identifier
-
+        thread_name = 'flourish_child_crf_export'
         last_doc = ExportFile.objects.filter(
             description='Flourish Child CRF Export', download_complete=True).order_by(
                 'created').last()
@@ -166,9 +167,10 @@ class ListBoardViewMixin:
             # Zip the file
 
             self.zipfile(
+                thread_name=thread_name,
                 dir_to_zip=dir_to_zip, start=start,
                 export_identifier=export_identifier,
-                doc=doc, study='flourish')
+                doc=doc)
         except Exception as e:
             raise e
 
@@ -177,7 +179,7 @@ class ListBoardViewMixin:
         """
         
         export_identifier = self.identifier_cls().identifier
-
+        thread_name = 'flourish_caregiver_crf_export'
         last_doc = ExportFile.objects.filter(
             description='Flourish Caregiver CRF Export', download_complete=True).order_by(
                 'created').last()
@@ -209,9 +211,10 @@ class ListBoardViewMixin:
             # Zip the file
 
             self.zipfile(
+                thread_name=thread_name,
                 dir_to_zip=dir_to_zip, start=start,
                 export_identifier=export_identifier,
-                doc=doc, study='flourish')
+                doc=doc)
         except Exception as e:
             raise e
     
@@ -221,7 +224,7 @@ class ListBoardViewMixin:
         """
         
         export_identifier = self.identifier_cls().identifier
-
+        thread_name = 'flourish_non_crf_export',
         last_doc = ExportFile.objects.filter(
             description='Flourish Non CRF Export',
             download_complete=True).order_by('created').last()
@@ -254,16 +257,17 @@ class ListBoardViewMixin:
             # Zip the file
 
             self.zipfile(
+                thread_name=thread_name,
                 dir_to_zip=dir_to_zip, start=start,
                 export_identifier=export_identifier,
-                doc=doc, study='flourish')
+                doc=doc)
         except Exception as e:
             raise e
 
 
     def zipfile(
-            self, dir_to_zip=None, start=None,
-            export_identifier=None, doc=None, study=None):
+            self, thread_name=None, dir_to_zip=None, start=None,
+            export_identifier=None, doc=None):
         """Zip file.
         """
         # Zip the file
@@ -288,8 +292,8 @@ class ListBoardViewMixin:
                 doc.save()
 
             # Notify user the download is done
-            subject = study + ' ' + export_identifier + ' Export'
-            message = (study + ' ' + export_identifier +
+            subject = export_identifier + ' ' + doc.description
+            message = (export_identifier + doc.description +
                        ' export files have been successfully generated and '
                        'ready for download. This is an automated message.')
             send_mail(
@@ -298,7 +302,7 @@ class ListBoardViewMixin:
                 settings.EMAIL_HOST_USER,  # FROM
                 [self.request.user.email],  # TO
                 fail_silently=False)
-            threading.Thread(target=self.stop_main_thread)
+            threading.Thread(target=self.stop_main_thread, args=(thread_name,))
 
     def is_clean(self, description=None):
 

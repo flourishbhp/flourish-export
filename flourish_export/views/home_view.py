@@ -21,20 +21,15 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
     navbar_selected_item = 'study_data_export'
     identifier_cls = ExportIdentifier
     
-    def non_crf_export(self):
-        """Export all Non CRF data.
+    def stop_main_thread(self, thread_name):
+        """Stop export file generation thread.
         """
-        pass
-    
-    
-    def caregiver_crf_export(self):
-        """Export all caregiver crf.
-        """
-        pass
-    
-    
-    def child_crf_export(self):
-        pass
+        time.sleep(20)
+        threads = threading.enumerate()
+        threads = [t for t in threads if t.is_alive()]
+        for thread in threads:
+            if thread.name == thread_name:
+                thread._stop()
     
 
     def get_context_data(self, **kwargs):
