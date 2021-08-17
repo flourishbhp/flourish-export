@@ -55,11 +55,11 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
                                  thread_target=self.download_child_data,
                                  description='Flourish Child CRF Export')
         non_crf_exports = ExportFile.objects.filter(
-            description='Flourish Non CRF Export').order_by('-uploaded_at')
+            description='Flourish Non CRF Export').order_by('-uploaded_at')[:10]
         caregiver_crf_exports = ExportFile.objects.filter(
-            description='Flourish Caregiver CRF Export').order_by('-uploaded_at')
+            description='Flourish Caregiver CRF Export').order_by('-uploaded_at')[:10]
         child_crf_exports = ExportFile.objects.filter(
-            description='Flourish Child CRF Export').order_by('-uploaded_at')
+            description='Flourish Child CRF Export').order_by('-uploaded_at')[:10]
         context.update(
             non_crf_exports=non_crf_exports,
             caregiver_crf_exports=caregiver_crf_exports,
