@@ -1,0 +1,47 @@
+{% extends 'edc_base/base.html' %}
+
+{% load static %}
+{% load crispy_forms_tags %}
+{% load follow_extras %}
+{% block extra-scripts %}
+	{{ block.super }}
+	<script src="https://cdn.datatables.net/1.10.13/js/jquery.dataTables.min.js"></script>
+	<script src="https://cdn.datatables.net/1.10.13/js/dataTables.bootstrap.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.13/css/dataTables.bootstrap.min.css">
+	<script type="text/javascript">
+	$(document).ready(function() {
+	    $('#missing-crfs').DataTable({
+	    	"ordering": false
+	    });
+	} );
+	</script>
+
+	<script type="text/javascript">
+
+	  jQuery(function() {
+	    jQuery('#users').change(function() {
+	        this.form.submit();
+	    });
+	});
+	</script>
+{% endblock extra-scripts %}
+
+{% block main %}
+<div class="container">
+   <div class="row">
+    
+    <p></p>
+    <h1>Study data export</h1>
+    <p>Generate and download study data sets from the tables below.</p>
+    <p> </p><p> </p>
+    
+        <div class="col-md-10 col-md-offset-1">
+
+			{% include "flourish_export/non_crf_export.html" %}            
+            {% include "flourish_export/caregiver_crf_export.html" %}
+            {% include "flourish_export/child_crf_export.html" %}
+
+		</div>
+	</div>
+</div>
+{% endblock main %}

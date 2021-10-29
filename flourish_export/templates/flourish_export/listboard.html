@@ -1,0 +1,53 @@
+{% extends "edc_dashboard/listboard.html" %}
+{% load admin_urls %}
+{% load edc_base_extras %}
+
+{% block extra-scripts %}
+{{ block.super }}
+
+<script type="text/javascript">
+</script>
+{% endblock extra-scripts %}
+             
+{% block listboard_panel %}
+    <a id="download_td_files" title="Generate all Export" class="btn btn-sm btn-default" role="button" 
+        href="{{ export_listboard_url }}?download=1">
+            <i class="fa fa-plus fa-sm"></i> Generate Flourish Export
+    </a>
+    <a id="return_to_home" title="go back" class="btn btn-sm btn-default" role="button" 
+        href="/">
+            <i class="fa fa-arrow-left fa-sm"></i> Go Back
+    </a>
+
+{% endblock listboard_panel %}
+
+{% block listboard_table_button_column %}
+{% endblock listboard_table_button_column %}
+
+{% block listboard_table_header %}
+    <!-- begin results header -->
+    <th>#</th>
+    <th>Export Identifier</th>
+    <th>Description</th>
+    <th>study</th>
+    <th>Download Export</th>
+    <th>Uploaded Date</th>
+    <th>Estimated File Preparation Time (Minutes)</th>
+    <th>User</th>
+    <!-- end results header -->
+{% endblock listboard_table_header %}
+
+
+{% block listboard_table_columns %}
+	<td>{{ result.export_identifier }} </td>
+	<td>{{ result.description }} </td>
+	<td>{{ result.study }} </td>
+	<td>{% if result.file_url %}
+	   <a href={{ result.file_url }}><i class="fa fa-download fa-sm"></i> file download</a>
+	{% else %}
+	    Pending.. 
+	{% endif %}</td>
+	<td>{{result.uploaded_at}}</td>
+	<td>{{result.files_generation_time}}</td>
+    <td nowrap>{{ result.user_created }}</td>
+{% endblock listboard_table_columns %}
