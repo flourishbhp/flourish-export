@@ -16,7 +16,7 @@ exclude_m2m_fields = exclude_fields + ['display_index', 'field_name',
 
 caregiver_crfs_list = [
   'arvsprepregnancy',
-  'caregiverclinicalmeasurementsFu',
+  'caregiverclinicalmeasurementsfu',
   'caregiverclinicalmeasurements',
   'cliniciannotes',
   'caregiveredinburghdeprscreening',
@@ -27,53 +27,66 @@ caregiver_crfs_list = [
   'caregiverhamdreferral',
   'caregiverphqdeprscreening',
   'caregiverphqreferral',
+  'covid19',
   'foodsecurityquestionnaire',
   'hivdisclosurestatusa',
-  'hivdisclosureStatusb',
-  'hivdisclosureStatusc',
-  'hivdisclosureStatusd',
+  'hivdisclosurestatusb',
+  'hivdisclosurestatusc',
   'hivrapidtestcounseling',
   'hivviralloadandcd4',
   'maternalarvduringpreg',
   'maternaldiagnoses',
-  # 'maternalivInterimHx',
+  'maternalhivinterimhx',
   'Maternalinterimidcc',
   'medicalhistory',
   'obstericalhistory',
   'sociodemographicdata',
   'substanceuseduringpregnancy',
-  'substanceUsepriorpregnancy',
+  'substanceusepriorpregnancy',
   'tbhistorypreg',
   'tbpresencehouseholdmembers',
+  'tbroutinehealthscreen',
   'tbscreenpreg',
   'ultrasound'
   ]
 
 caregiver_inlines_dict = {
   'cliniciannotes': [['cliniciannotesimage'], 'clinician_notes_id'],
-  #'maternalarvduringpreg': [['maternalarv'], 'maternal_arv_durg_preg_id']
+  'maternalarvduringpreg': [['maternalarv'], 'maternal_arv_durg_preg_id'],
 }
 
 caregiver_model_list = [
-  'antenatalEnrollment', 'caregiverchildconsent',
+  'antenatalenrollment', 'subjectconsent', 'caregiverchildconsent',
   'caregiverpreviouslyenrolled', 'flourishconsentversion',
-  'maternaldelivery', 'caregiverpreviouslyenrolled', # 'maternalarv', 
+  'maternaldelivery', 'caregiverpreviouslyenrolled', 'caregivercontact',
+  'caregiverlocator'
 ]
 
 caregiver_many_to_many_crf = [
   ['arvsprepregnancy', 'prior_arv', 'priorarv'],
   ['maternaldiagnoses', 'who', 'wcsdxadult'],
-  ['medicalhistory', 'caregiver_chronic', 'chronicConditions',],
-  ['medicalhistory', 'who', 'wcsdxadult',],
-  ['medicalhistory', 'caregiver_medications', 'caregiverMedications',]
+  ['medicalhistory', 'caregiver_chronic', 'chronicconditions', ],
+  ['medicalhistory', 'who', 'wcsdxadult', ],
+  ['medicalhistory', 'caregiver_medications', 'caregivermedications', ],
+  ['covid19', 'isolations_symptoms', 'covidsymptoms', ],
+  ['covid19', 'symptoms_for_past_14days', 'covidsymptomsafter14days']
 ]
 
 caregiver_many_to_many_non_crf = [[
-    'maternaldelivery','delivery_complications',],]
+    'maternaldelivery', 'delivery_complications', ], ]
 
-offstudy_prn_model_list = ['caregiveroffstudy','childoffstudy',]
+offstudy_prn_model_list = ['caregiveroffstudy', 'childoffstudy', ]
 
-death_report_prn_model_list = ['deathReport',]
+death_report_prn_model_list = ['caregiverdeathreport', 'childdeathreport', ]
+
+follow_model_list = ['booking', 'logentry', 'inpersonlog',
+                     'inpersoncontactattempt', 'worklist']
+
+follow_model_inlines_dict = {
+    'inpersonlog': [['inpersoncontactattempt'], 'in_person_log_id']}
+
+follow_model_many_to_many = [
+    ['logentry', 'appt_reason_unwilling', 'reasonsunwilling']]
 
 child_crf_list = [
   'academicperformance',
@@ -83,14 +96,14 @@ child_crf_list = [
   'childbirthscreening',
   'childclinicalmeasurements',
   'childcliniciannotes',
-  'childfoodSecurityquestionnaire',
-  'childgadAnxietyscreening',
+  'childfoodsecurityquestionnaire',
+  'childgadanxietyscreening',
   'childgadreferral',
-  'childhivrapidTestcounseling',
+  'childhivrapidtestcounseling',
   'childimmunizationhistory',
   'childmedicalhistory',
-  'childphqDepressionscreening',
-  'childphqReferral',
+  'childphqdepressionscreening',
+  'childphqreferral',
   'childphysicalactivity',
   'childpregtesting',
   'childprevioushospitalization',
@@ -99,7 +112,9 @@ child_crf_list = [
   'childworkingstatus',
   'infantarvexposure',
   'infantcongenitalanomalies',
+  'infantfeedingpractices',
   'infantfeeding',
+  'childcovid19'
   ]
 
 child_inlines_dict = {
@@ -116,21 +131,25 @@ child_inlines_dict = {
     'infantrenal',
     'infantmusculoskeletal',
     'infantskin',
-    'infanttrisomies',], 'congenital_anomalies_id'],
+    'infanttrisomies', ], 'congenital_anomalies_id'],
   'birthfeedingvaccine': [['birthvaccines'], 'birth_feed_vaccine_id'],
-  'childcliniciannotes': [['cliniciannotesImage'], 'clinician_notes_id'],
+  'childcliniciannotes': [['cliniciannotesimage'], 'clinician_notes_id'],
   'childimmunizationhistory': [['vaccinesmissed', 'vaccinesreceived'],
-                               'child_immunization_history_id'],  
+                               'child_immunization_history_id'],
   'infantcongenitalanomalies': [[
       'infantcns', 'infantfacialdefect', 'infantcleftdisorder',
       'infantmouthupgi', 'infantmouthupgi', 'infantcardiodisorder',
       'infantrespiratoryDefect', 'infantlowergi', 'infantfemalegenital',
       'infantmalegenital', 'infantrenal', 'infantmusculoskeletal', 'infantskin',
-      'infanttrisomies'], 'congenital_anomalies_id']}
+      'infanttrisomies'], 'congenital_anomalies_id'],
+  'childprevioushospitalization': [['childprehospitalizationinline'], 'child_pre_hospitalization_id']}
 
 child_many_to_many_crf = [
   ['childmedicalhistory', 'child_chronic', 'childdiseases'],
-  ['childPrevioushospitalization', 'reason_hospitalized','childdiseases'],
+  ['childprevioushospitalization', 'reason_hospitalized', 'childdiseases'],
+  ['childcovid19', 'isolations_symptoms', 'childcovidsymptoms'],
+  ['childcovid19', 'symptoms_for_past_14days', 'childcovidsymptomsafter14days'],
+  ['infantfeeding', 'solid_foods', 'solidfoods']
 ]
 
 child_model_list = [

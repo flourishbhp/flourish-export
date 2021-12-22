@@ -18,7 +18,7 @@ class ExportNonCrfData:
         self.rs_cls = django_apps.get_model('edc_registration.registeredsubject')
         self.appointment_cls = django_apps.get_model('edc_appointment.appointment')
 
-    def caregiver_non_crfs(self, caregiver_model_list=None, exclude=None):
+    def caregiver_non_crfs(self, caregiver_model_list=None, exclude=None, study=None):
         """E.
         """
         for model_name in caregiver_model_list:
@@ -27,7 +27,7 @@ class ExportNonCrfData:
             elif 'appointment' == model_name:
                 model_cls = self.appointment_cls
             else:
-                model_cls = django_apps.get_model('flourish_caregiver', model_name)
+                model_cls = django_apps.get_model(study, model_name)
             objs = model_cls.objects.all()
             count = 0
             models_data = []
@@ -36,7 +36,7 @@ class ExportNonCrfData:
                 data = self.export_methods_cls.fix_date_format(self.export_methods_cls.non_crf_obj_dict(obj=obj))
                 if exclude:
                     exclude_fields.append(exclude)
-                    
+
                 for e_fields in exclude_fields:
                     try:
                         del data[e_fields]
@@ -45,20 +45,86 @@ class ExportNonCrfData:
                 models_data.append(data)
                 count += 1
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            fname = 'flourish_caregiver_' + model_name + '_' + timestamp + '.csv'
+            fname = f'{study}_' + model_name + '_' + timestamp + '.csv'
             final_path = self.export_path + fname
             df_crf = pd.DataFrame(models_data)
             df_crf.rename(columns={'subject_identifier':
                                    'subject_identifier'}, inplace=True)
             df_crf.to_csv(final_path, encoding='utf-8', index=False)
 
-    def caregiver_m2m_non_crf(self, caregiver_many_to_many_non_crf=None):
+    def follow_models(self, follow_model_list=None, exclude=None, study=None):
+        for model_name in follow_model_list:
+            model_cls = django_apps.get_model(study, model_name)
+            objs = model_cls.objects.all()
+            count = 0
+            models_data = []
+
+            for obj in objs:
+                data = self.export_methods_cls.fix_date_format(
+                    self.export_methods_cls.follow_data_dict(model_obj=obj))
+                if exclude:
+                    exclude_fields.append(exclude)
+
+                for e_fields in exclude_fields:
+                    try:
+                        del data[e_fields]
+                    except KeyError:
+                        pass
+                models_data.append(data)
+                count += 1
+            timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+            fname = f'{study}_' + model_name + '_' + timestamp + '.csv'
+            final_path = self.export_path + fname
+            df_crf = pd.DataFrame(models_data)
+            df_crf.to_csv(final_path, encoding='utf-8', index=False)
+
+    def follow_m2m(self, many_to_many_models=None, study=None):
+        for follow_model_info in many_to_many_models:
+            model_name, mm_field, _ = follow_model_info
+            model_cls = django_apps.get_model(study, model_name)
+            count = 0
+            mergered_data = []
+            model_objs = model_cls.objects.all()
+            for model_obj in model_objs:
+                mm_objs = getattr(model_obj, mm_field).all()
+                if mm_objs:
+                    for mm_obj in mm_objs:
+                        mm_data = {mm_field: mm_obj.short_name}
+
+                        model_data = self.export_methods_cls.follow_data_dict(model_obj=model_obj)
+
+                        # Merged many to many and CRF data
+                        data = self.export_methods_cls.fix_date_format({**model_data, **mm_data})
+                        for e_fields in exclude_m2m_fields:
+                            try:
+                                del data[e_fields]
+                            except KeyError:
+                                pass
+                        mergered_data.append(data)
+                        count += 1
+                else:
+                    model_data = self.export_methods_cls.fix_date_format(
+                        self.export_methods_cls.follow_data_dict(model_obj=model_obj))
+                    for e_fields in exclude_fields:
+                        try:
+                            del model_data[e_fields]
+                        except KeyError:
+                            pass
+                    mergered_data.append(model_data)
+                    count += 1
+            timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+            fname = f'{study}_' + model_name + '_' + 'merged' '_' + mm_field + '_' + timestamp + '.csv'
+            final_path = self.export_path + fname
+            df_crf_many2many = pd.DataFrame(mergered_data)
+            df_crf_many2many.to_csv(final_path, encoding='utf-8', index=False)
+
+    def caregiver_m2m_non_crf(self, caregiver_many_to_many_non_crf=None, study=None):
         """.
         """
 
         for crf_infor in caregiver_many_to_many_non_crf:
             crf_name, mm_field = crf_infor
-            crf_cls = django_apps.get_model('flourish_caregiver', crf_name)
+            crf_cls = django_apps.get_model(study, crf_name)
             count = 0
             mergered_data = []
             crf_objs = crf_cls.objects.all()
@@ -90,7 +156,7 @@ class ExportNonCrfData:
                     mergered_data.append(crfdata)
                     count += 1
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            fname = 'flourish_caregiver_' + crf_name + '_' + 'merged' '_' + mm_field + '_' + timestamp + '.csv'
+            fname = f'{study}_' + crf_name + '_' + 'merged' '_' + mm_field + '_' + timestamp + '.csv'
             final_path = self.export_path + fname
             df_crf_many2many = pd.DataFrame(mergered_data)
             df_crf_many2many.to_csv(final_path, encoding='utf-8', index=False)

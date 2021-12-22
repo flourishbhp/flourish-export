@@ -17,6 +17,8 @@ from ..export_model_lists import (
     child_inlines_dict, child_crf_list, child_many_to_many_crf,
     child_model_list, caregiver_model_list, death_report_prn_model_list,
     offstudy_prn_model_list, caregiver_many_to_many_non_crf)
+from ..export_model_lists import (follow_model_list, follow_model_many_to_many,
+                                  follow_model_inlines_dict)
 from ..export_non_crfs import ExportNonCrfData
 from ..models import ExportFile
 
@@ -63,8 +65,18 @@ class ListBoardViewMixin:
         non_crf_data = ExportNonCrfData(export_path=export_path)
         non_crf_data.child_non_crf(child_model_list=child_model_list)
         non_crf_data.death_report(death_report_prn_model_list=death_report_prn_model_list)
-        non_crf_data.caregiver_non_crfs(caregiver_model_list=caregiver_model_list)
-        non_crf_data.caregiver_m2m_non_crf(caregiver_many_to_many_non_crf=caregiver_many_to_many_non_crf)
+        non_crf_data.caregiver_non_crfs(
+            caregiver_model_list=caregiver_model_list,
+            study='flourish_caregiver')
+        non_crf_data.caregiver_m2m_non_crf(
+            caregiver_many_to_many_non_crf=caregiver_many_to_many_non_crf,
+            study='flourish_caregiver')
+        non_crf_data.follow_models(
+            follow_model_list=follow_model_list,
+            study='flourish_follow')
+        non_crf_data.follow_m2m(
+            many_to_many_models=follow_model_many_to_many,
+            study='flourish_follow')
         non_crf_data.child_visit()
         non_crf_data.caregiver_visit()
         non_crf_data.offstudy(offstudy_prn_model_list=offstudy_prn_model_list)
@@ -77,13 +89,13 @@ class ListBoardViewMixin:
     def download_all_data(self):
         """Export all data.
         """
-        
+
         export_identifier = self.identifier_cls().identifier
         thread_name = 'flourish_all_export'
         last_doc = ExportFile.objects.filter(
             description='Flourish All Export', download_complete=True).order_by(
                 'created').last()
-        
+
         if last_doc:
             download_time = last_doc.download_time
         else:
@@ -106,10 +118,10 @@ class ListBoardViewMixin:
             self.export_caregiver_data(export_path=export_path)
             export_path = dir_to_zip + '/child/'
             self.export_child_data(export_path=export_path)
-            
+
             export_path = dir_to_zip + '/non_crf/'
             self.export_non_crf_data(export_path=export_path)
-            
+
             # caregiver_export_path = dir_to_zip + '/caregiver/'
             # child_export_path = dir_to_zip + '/child/'
             #
@@ -133,13 +145,13 @@ class ListBoardViewMixin:
     def download_child_data(self):
         """Export all data.
         """
-        
+
         export_identifier = self.identifier_cls().identifier
         thread_name = 'flourish_child_crf_export'
         last_doc = ExportFile.objects.filter(
             description='Flourish Child CRF Export', download_complete=True).order_by(
                 'created').last()
-        
+
         if last_doc:
             download_time = last_doc.download_time
         else:
@@ -177,13 +189,13 @@ class ListBoardViewMixin:
     def download_caregiver_data(self):
         """Export caregiver data.
         """
-        
+
         export_identifier = self.identifier_cls().identifier
         thread_name = 'flourish_caregiver_crf_export'
         last_doc = ExportFile.objects.filter(
             description='Flourish Caregiver CRF Export', download_complete=True).order_by(
                 'created').last()
-        
+
         if last_doc:
             download_time = last_doc.download_time
         else:
@@ -217,18 +229,17 @@ class ListBoardViewMixin:
                 doc=doc)
         except Exception as e:
             raise e
-    
-    
+
     def download_non_crf_data(self):
         """Export all data.
         """
-        
+
         export_identifier = self.identifier_cls().identifier
         thread_name = 'flourish_non_crf_export',
         last_doc = ExportFile.objects.filter(
             description='Flourish Non CRF Export',
             download_complete=True).order_by('created').last()
-        
+
         if last_doc:
             download_time = last_doc.download_time
         else:
@@ -247,7 +258,6 @@ class ListBoardViewMixin:
             zipped_file_path = 'documents/' + export_identifier + '_flourish_non_crf_export_' + today_date + '.zip'
             dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_non_crf_export_' + today_date
 
-            
             export_path = dir_to_zip + '/non_crf/'
             self.export_non_crf_data(export_path=export_path)
 
@@ -263,7 +273,6 @@ class ListBoardViewMixin:
                 doc=doc)
         except Exception as e:
             raise e
-
 
     def zipfile(
             self, thread_name=None, dir_to_zip=None, start=None,
