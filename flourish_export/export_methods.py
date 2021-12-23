@@ -114,7 +114,7 @@ class ExportMethods:
         try:
             rs = self.rs_cls.objects.get(subject_identifier=crf_obj.child_visit.subject_identifier)
         except self.rs_cls.DoesNotExist:
-            
+
             raise ValidationError('RegisteredSubject can not be missing')
         else:
             data.update(
@@ -149,7 +149,7 @@ class ExportMethods:
                 screening_age_in_years=None,
                 dob=None,
                 gender=None,
-                
+
             )
         if 'registration_datetime' not in data:
             try:
@@ -164,4 +164,9 @@ class ExportMethods:
                     registration_datetime=rs.registration_datetime,
                     screening_datetime=rs.screening_datetime
                 )
+        return data
+
+    def follow_data_dict(self, model_obj=None):
+        data = model_obj.__dict__
+        data = self.encrypt_values(obj_dict=data, obj_cls=model_obj.__class__)
         return data
