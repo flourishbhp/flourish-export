@@ -1,4 +1,5 @@
 import datetime
+from unittest import result
 
 from django.apps import apps as django_apps
 from django.core.exceptions import ValidationError
@@ -17,6 +18,17 @@ class ExportMethods:
     """Export FLourish data.
     """
 
+    caregiver_offstudy_model = 'flourish_prn.caregiveroffstudy'
+    child_offstudy_model = 'flourish_prn.childoffstudy'
+
+    @property
+    def caregiver_offstudy_cls(self):
+        return django_apps.get_model(self.caregiver_offstudy_model)
+    
+    @property
+    def child_offstudy_cls(self):
+        return django_apps.get_model(self.child_offstudy_model)
+
     def __init__(self):
         self.rs_cls = django_apps.get_model('edc_registration.registeredsubject')
         self.subject_consent_csl = django_apps.get_model('flourish_caregiver.subjectconsent')
@@ -31,6 +43,43 @@ class ExportMethods:
                     new_value = f.field_cryptor.encrypt(value)
                     result_dict_obj[key] = new_value
         return result_dict_obj
+
+    def onstudy_value(self, subject_identifier, is_caregiver):
+        """
+        This method is used to check if the subject identifier is offstudy
+        subject_identifier - specify is the participent is offstudy
+        is_caregiver - should be true if the subject identifier is from a caregiver, 
+        otherwise false when the subject Identifier si from a child
+        """
+        
+        # is should always be initialized
+        if is_caregiver is None:
+            raise TypeError(
+                'is_caregiver cannot be null, value should either be True or False')
+
+        # Value constants
+        ON_STUDY = 'On Study'
+        OFF_STUDY = 'Off Study'
+
+        # when an exception is thrown it means the caregiver / child is offstudy
+        # or inversly they are both onstudy
+        if is_caregiver:
+            try:
+                self.caregiver_offstudy_cls.objects.get(subject_identifier=subject_identifier)
+            except self.caregiver_offstudy_cls.DoesNotExist:
+                result = ON_STUDY
+            else:
+                result = OFF_STUDY
+        else:
+            try:
+                self.child_offstudy_cls.objects.get(subject_identifier=subject_identifier)
+            except self.child_offstudy_cls.DoesNotExist:
+                result = ON_STUDY
+            else:
+                result = OFF_STUDY
+
+        return result
+
 
     def fix_date_format(self, obj_dict=None):
         """Change all dates into a format for the export
@@ -76,6 +125,10 @@ class ExportMethods:
             study_status=crf_obj.maternal_visit.study_status,
             appt_status=crf_obj.maternal_visit.appointment.appt_status,
             appt_datetime=crf_obj.maternal_visit.appointment.appt_datetime,
+            status = self.onstudy_value(
+                subject_identifier=crf_obj.maternal_visit.subject_identifier,
+                is_caregiver=True,
+            )
         )
         try:
             rs = self.rs_cls.objects.get(subject_identifier=crf_obj.maternal_visit.subject_identifier)
@@ -109,6 +162,10 @@ class ExportMethods:
             study_status=crf_obj.child_visit.study_status,
             appt_status=crf_obj.child_visit.appointment.appt_status,
             appt_datetime=crf_obj.child_visit.appointment.appt_datetime,
+            status=self.onstudy_value(
+                subject_identifier=crf_obj.child_visit.subject_identifier,
+                is_caregiver=False,
+            )
         )
 
         try:
@@ -149,6 +206,7 @@ class ExportMethods:
                 screening_age_in_years=None,
                 dob=None,
                 gender=None,
+                
 
             )
         if 'registration_datetime' not in data:
