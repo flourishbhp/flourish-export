@@ -63,11 +63,13 @@ class ListBoardViewMixin:
         """Export both child and caregiver non CFR data.
         """
         non_crf_data = ExportNonCrfData(export_path=export_path)
+
         non_crf_data.child_non_crf(child_model_list=child_model_list)
         non_crf_data.death_report(death_report_prn_model_list=death_report_prn_model_list)
         non_crf_data.caregiver_non_crfs(
             caregiver_model_list=caregiver_model_list,
             study='flourish_caregiver')
+
         non_crf_data.caregiver_m2m_non_crf(
             caregiver_many_to_many_non_crf=caregiver_many_to_many_non_crf,
             study='flourish_caregiver')
@@ -167,8 +169,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
-            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_export_' + today_date
+            zipped_file_path = f'documents/{export_identifier}_flourish_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_export_{today_date}'
 
             export_path = dir_to_zip + '/child/'
             self.export_child_data(export_path=export_path)
@@ -211,8 +213,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
-            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_export_' + today_date
+            zipped_file_path = f'documents/{export_identifier}_flourish_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_export_{today_date}'
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
@@ -255,8 +257,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = 'documents/' + export_identifier + '_flourish_non_crf_export_' + today_date + '.zip'
-            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_non_crf_export_' + today_date
+            zipped_file_path = f'documents/{export_identifier}_flourish_non_crf_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_non_crf_export_{today_date}'
 
             export_path = dir_to_zip + '/non_crf/'
             self.export_non_crf_data(export_path=export_path)

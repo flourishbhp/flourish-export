@@ -1,4 +1,5 @@
 import datetime
+import re
 from unittest import result
 
 from django.apps import apps as django_apps
@@ -7,7 +8,6 @@ from django_crypto_fields.fields import (
     EncryptedCharField, EncryptedDecimalField, EncryptedIntegerField,
     EncryptedTextField, FirstnameField, IdentityField, LastnameField)
 from pytz import timezone
-import re
 
 encrypted_fields = [
     EncryptedCharField, EncryptedDecimalField, EncryptedIntegerField,
@@ -24,7 +24,7 @@ class ExportMethods:
     @property
     def caregiver_offstudy_cls(self):
         return django_apps.get_model(self.caregiver_offstudy_model)
-    
+
     @property
     def child_offstudy_cls(self):
         return django_apps.get_model(self.child_offstudy_model)
@@ -51,7 +51,7 @@ class ExportMethods:
         is_caregiver - should be true if the subject identifier is from a caregiver, 
         otherwise false when the subject Identifier si from a child
         """
-        
+
         # is should always be initialized
         if is_caregiver is None:
             raise TypeError(
@@ -79,7 +79,6 @@ class ExportMethods:
                 result = OFF_STUDY
 
         return result
-
 
     def fix_date_format(self, obj_dict=None):
         """Change all dates into a format for the export
@@ -125,7 +124,7 @@ class ExportMethods:
             study_status=crf_obj.maternal_visit.study_status,
             appt_status=crf_obj.maternal_visit.appointment.appt_status,
             appt_datetime=crf_obj.maternal_visit.appointment.appt_datetime,
-            status = self.onstudy_value(
+            status=self.onstudy_value(
                 subject_identifier=crf_obj.maternal_visit.subject_identifier,
                 is_caregiver=True,
             )
@@ -191,14 +190,31 @@ class ExportMethods:
 
         data = obj.__dict__
         data = self.encrypt_values(obj_dict=data, obj_cls=obj.__class__)
-        subject_consent = self.subject_consent_csl.objects.filter(subject_identifier=obj.subject_identifier).last()
-        if subject_consent:
-            if 'dob' not in data:
-                data.update(dob=subject_consent.dob)
-            if 'gender' in data:
-                data.update(gender=subject_consent.gender)
-            if 'screening_identifier' not in data:
-                data.update(screening_identifier=subject_consent.screening_identifier)
+        if 'subject_identifier' in data:
+            subject_consent = self.subject_consent_csl.objects.filter(
+                subject_identifier=obj.subject_identifier).last()
+
+            if subject_consent:
+                if 'dob' not in data:
+                    data.update(dob=subject_consent.dob)
+                if 'gender' in data:
+                    data.update(gender=subject_consent.gender)
+                if 'screening_identifier' not in data:
+                    data.update(screening_identifier=subject_consent.screening_identifier)
+
+            if 'registration_datetime' not in data:
+                try:
+                    rs = self.rs_cls.objects.get(subject_identifier=obj.subject_identifier)
+                except self.rs_cls.DoesNotExist:
+                    data.update(
+                        registration_datetime=None,
+                        screening_datetime=None
+                    )
+                else:
+                    data.update(
+                        registration_datetime=rs.registration_datetime,
+                        screening_datetime=rs.screening_datetime
+                    )
         else:
             if 'screening_identifier' not in data:
                 data.update(screening_identifier=None)
@@ -206,22 +222,9 @@ class ExportMethods:
                 screening_age_in_years=None,
                 dob=None,
                 gender=None,
-                
 
             )
-        if 'registration_datetime' not in data:
-            try:
-                rs = self.rs_cls.objects.get(subject_identifier=obj.subject_identifier)
-            except self.rs_cls.DoesNotExist:
-                data.update(
-                    registration_datetime=None,
-                    screening_datetime=None
-                )
-            else:
-                data.update(
-                    registration_datetime=rs.registration_datetime,
-                    screening_datetime=rs.screening_datetime
-                )
+
         return data
 
     def follow_data_dict(self, model_obj=None):
