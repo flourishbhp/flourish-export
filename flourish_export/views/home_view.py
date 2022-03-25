@@ -20,7 +20,7 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
     navbar_name = 'flourish_export'
     navbar_selected_item = 'study_data_export'
     identifier_cls = ExportIdentifier
-    
+
     def stop_main_thread(self, thread_name):
         """Stop export file generation thread.
         """
@@ -30,7 +30,6 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
         for thread in threads:
             if thread.name == thread_name:
                 thread._stop()
-    
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -53,6 +52,7 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
             description='Flourish Non CRF Export').order_by('-uploaded_at')[:10]
         caregiver_crf_exports = ExportFile.objects.filter(
             description='Flourish Caregiver CRF Export').order_by('-uploaded_at')[:10]
+
         child_crf_exports = ExportFile.objects.filter(
             description='Flourish Child CRF Export').order_by('-uploaded_at')[:10]
         context.update(
@@ -60,7 +60,6 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
             caregiver_crf_exports=caregiver_crf_exports,
             child_crf_exports=child_crf_exports)
         return context
-
 
     def generate_export(self, thread_name=None, active_download=False,
                         thread_target=None, description=None):

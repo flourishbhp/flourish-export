@@ -146,11 +146,12 @@ child_inlines_dict = {
 
 child_many_to_many_crf = [
   ['childmedicalhistory', 'child_chronic', 'childdiseases'],
-  ['childprevioushospitalization', 'reason_hospitalized', 'childdiseases'],
   ['childcovid19', 'isolations_symptoms', 'childcovidsymptoms'],
   ['childcovid19', 'symptoms_for_past_14days', 'childcovidsymptomsafter14days'],
   ['infantfeeding', 'solid_foods', 'solidfoods']
 ]
+
+child_many_to_many_non_crf = [['childprehospitalizationinline', 'reason_hospitalized'], ]
 
 child_model_list = [
     'childassent', 'appointment', 'childcontinuedconsent', 'childdataset',
