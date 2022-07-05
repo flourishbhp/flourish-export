@@ -308,10 +308,10 @@ class ListBoardViewMixin:
                        ' export files have been successfully generated and '
                        'ready for download. This is an automated message.')
             send_mail(
-                subject,
-                message,
-                settings.EMAIL_HOST_USER,  # FROM
-                [self.request.user.email],  # TO
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,  # FROM
+                recipient_list=[self.request.user.email],  # TO
                 fail_silently=False)
             threading.Thread(target=self.stop_main_thread, args=(thread_name,))
 
