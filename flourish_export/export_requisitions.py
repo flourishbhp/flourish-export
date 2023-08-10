@@ -1,10 +1,6 @@
-import pandas as pd, datetime, os
-
 from django.apps import apps as django_apps
 
-
 from .export_methods import ExportMethods
-from .export_model_lists import exclude_fields
 
 
 class ExportRequisitionData:

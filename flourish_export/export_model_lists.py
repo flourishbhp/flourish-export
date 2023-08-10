@@ -34,10 +34,11 @@ caregiver_crfs_list = [
   'hivdisclosurestatusc',
   'hivrapidtestcounseling',
   'hivviralloadandcd4',
+  'maternalarvatdelivery',
   'maternalarvduringpreg',
   'maternaldiagnoses',
   'maternalhivinterimhx',
-  'Maternalinterimidcc',
+  'maternalinterimidcc',
   'medicalhistory',
   'obstericalhistory',
   'sociodemographicdata',
@@ -52,7 +53,8 @@ caregiver_crfs_list = [
 
 caregiver_inlines_dict = {
   'cliniciannotes': [['cliniciannotesimage'], 'clinician_notes_id'],
-  'maternalarvduringpreg': [['maternalarv'], 'maternal_arv_durg_preg_id'],
+  'maternalarvduringpreg': [['maternalarvtableduringpreg'], 'maternal_arv_durg_preg_id'],
+  'maternalarvatdelivery': [['maternalarvtableatdelivery'], 'maternal_arv_at_delivery_id'],
 }
 
 caregiver_model_list = [
