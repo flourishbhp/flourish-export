@@ -17,8 +17,7 @@ from ..export_model_lists import (
     child_inlines_dict, child_crf_list, child_many_to_many_crf,
     child_model_list, caregiver_model_list, death_report_prn_model_list,
     offstudy_prn_model_list, caregiver_many_to_many_non_crf)
-from ..export_model_lists import (follow_model_list, follow_model_many_to_many,
-                                  follow_model_inlines_dict)
+from ..export_model_lists import follow_model_list, follow_model_many_to_many
 from ..export_non_crfs import ExportNonCrfData
 from ..models import ExportFile
 
