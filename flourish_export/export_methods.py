@@ -1,13 +1,15 @@
 import datetime
 import re
 from unittest import result
+from pytz import timezone
 
 from django.apps import apps as django_apps
 from django.core.exceptions import ValidationError
 from django_crypto_fields.fields import (
     EncryptedCharField, EncryptedDecimalField, EncryptedIntegerField,
     EncryptedTextField, FirstnameField, IdentityField, LastnameField)
-from pytz import timezone
+
+from .export_model_lists import exclude_inline_fields
 
 encrypted_fields = [
     EncryptedCharField, EncryptedDecimalField, EncryptedIntegerField,
@@ -87,7 +89,7 @@ class ExportMethods:
         Format: m/d/y
         """
 
-        result_dict_obj = {**obj_dict}
+        result_dict_obj = {}
         for key, value in obj_dict.items():
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(timezone('Africa/Gaborone'))
@@ -100,11 +102,13 @@ class ExportMethods:
                 value = value.strftime('%m/%d/%Y')
                 new_key = re.sub('time', '', key)
                 result_dict_obj[new_key] = value
-                del result_dict_obj[key]
                 result_dict_obj[time_variable] = time_value
+                continue
             elif isinstance(value, datetime.date):
                 value = value.strftime('%m/%d/%Y')
                 result_dict_obj[key] = value
+                continue
+            result_dict_obj[key] = value
         return result_dict_obj
 
     def caregiver_crf_data_dict(self, crf_obj=None):
@@ -169,11 +173,15 @@ class ExportMethods:
         for field in inline_fields:
             key_manager = getattr(model_obj, f'{field.name}_set',
                                   getattr(model_obj, f'{field.related_name}', None))
+            field_id = field.field.attname
+            exclude_inline_fields.append(field_id)
             if key_manager:
                 inline_values = key_manager.all()
-                for obj in inline_values:
-                    data = obj.__dict__
-                    data.update(self.m2m_data_dict(obj))
+                for count, obj in enumerate(inline_values):
+                    inline_data = obj.__dict__
+                    inline_data = {f'{key}__{count}': value for key, value in inline_data.items() if key not in exclude_inline_fields}
+                    inline_data.update(self.m2m_data_dict(obj))
+                    data.update(inline_data)
         return data
 
     def child_crf_data(self, crf_obj=None):
