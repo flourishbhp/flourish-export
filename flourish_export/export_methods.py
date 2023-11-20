@@ -158,13 +158,13 @@ class ExportMethods:
             choices = self.m2m_list_data(model_cls=model_cls)
             key_manager = getattr(model_obj, field.name)
             for choice in choices:
-                data[choice] = 0
+                data[f'{field.name}__{choice}'] = 0
                 try:
                     key_manager.get(short_name=choice)
                 except model_cls.DoesNotExist:
                     continue
                 else:
-                    data[choice] = 1
+                    data[f'{field.name}__{choice}'] = 1
         return data
 
     def inline_data_dict(self, model_obj):

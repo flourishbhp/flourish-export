@@ -90,8 +90,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
-            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_export_' + today_date
+            zipped_file_path = 'documents/' + export_identifier + '_flourish_all_export_' + today_date + '.zip'
+            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_all_export_' + today_date
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
@@ -146,8 +146,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = f'documents/{export_identifier}_flourish_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_export_{today_date}'
+            zipped_file_path = f'documents/{export_identifier}_flourish_child_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_child_export_{today_date}'
 
             export_path = dir_to_zip + '/child/'
             self.export_child_data(export_path=export_path)
@@ -190,8 +190,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = f'documents/{export_identifier}_flourish_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_export_{today_date}'
+            zipped_file_path = f'documents/{export_identifier}_flourish_caregiver_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_caregiver_export_{today_date}'
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
