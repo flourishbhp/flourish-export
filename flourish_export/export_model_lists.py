@@ -118,10 +118,6 @@ child_crf_list = [
   'brief2parent',
   'brief2selfreported',
   'childbirthscreening',
-  'childcbclsection1',
-  'childcbclsection2',
-  'childcbclsection3',
-  'childcbclsection4',
   'childclinicalmeasurements',
   'childcliniciannotes',
   'childfoodsecurityquestionnaire',
@@ -157,7 +153,11 @@ child_crf_list = [
   'infantfeedingpractices',
   'infantfeeding',
   'infanthivtesting',
-  'childcovid19'
+  'childcovid19',
+  {'childcbcl': ['childcbclsection1',
+                 'childcbclsection2',
+                 'childcbclsection3',
+                 'childcbclsection4',]},
   ]
 
 child_inlines_dict = {

@@ -150,7 +150,7 @@ class ExportMethods:
         data.update(self.inline_data_dict(crf_obj))
         return data
 
-    def m2m_data_dict(self, model_obj=None):
+    def m2m_data_dict(self, model_obj=None, inline_count=None):
         data = {}
         m2m_fields = model_obj._meta.many_to_many
         for field in m2m_fields:
@@ -158,13 +158,15 @@ class ExportMethods:
             choices = self.m2m_list_data(model_cls=model_cls)
             key_manager = getattr(model_obj, field.name)
             for choice in choices:
-                data[f'{field.name}__{choice}'] = 0
+                field_name = f'{field.name}__{choice}'
+                field_name = f'{field_name}__{inline_count}' if inline_count else field_name
+                data[field_name] = 0
                 try:
                     key_manager.get(short_name=choice)
                 except model_cls.DoesNotExist:
                     continue
                 else:
-                    data[f'{field.name}__{choice}'] = 1
+                    data[field_name] = 1
         return data
 
     def inline_data_dict(self, model_obj):
@@ -180,7 +182,7 @@ class ExportMethods:
                 for count, obj in enumerate(inline_values):
                     inline_data = obj.__dict__
                     inline_data = {f'{key}__{count}': value for key, value in inline_data.items() if key not in exclude_inline_fields}
-                    inline_data.update(self.m2m_data_dict(obj))
+                    inline_data.update(self.m2m_data_dict(obj, str(count)))
                     data.update(inline_data)
         return data
 

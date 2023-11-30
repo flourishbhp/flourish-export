@@ -94,7 +94,7 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
 
                     messages.add_message(
                         self.request, messages.INFO,
-                        (f'Download for {description}has been initiated, you will receive an email once '
+                        (f'Download for {description} has been initiated, you will receive an email once '
                          'the download is completed. Estimated download time: '
                          f'{last_doc_time} minutes, file generation started at:'
                          f' {start_time}'))
