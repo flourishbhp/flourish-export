@@ -17,30 +17,71 @@ class ExportDataMixin:
         self.export_methods_cls = ExportMethods()
 
     def export_crfs(self, crf_list=None, crf_data_dict=None, study=None):
-
         """Export crf data.
         """
         for crf_name in crf_list:
-            crf_cls = django_apps.get_model(study, crf_name)
-            objs = crf_cls.objects.all()
-            count = 0
             crf_data = []
-            for crf_obj in objs:
-                temp_data = crf_data_dict(crf_obj=crf_obj)
-                data = self.export_methods_cls.fix_date_format(
-                    obj_dict=temp_data)
-                for e_fields in exclude_fields:
-                    try:
-                        del data[e_fields]
-                    except KeyError:
-                        pass
-                crf_data.append(data)
-                count += 1
+            file_name = crf_name
+            if isinstance(crf_name, dict):
+                for f_name, crf_names in crf_name.items():
+                    file_name = f_name
+                    self.combine_crf_data(
+                        crf_data, crf_data_dict, crf_names, study)
+            else:
+                self.construct_crf_data(
+                    crf_data, crf_data_dict, crf_name, study)
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            fname = study + '_' + crf_name + '_' + timestamp + '.csv'
+            fname = study + '_' + file_name + '_' + timestamp + '.csv'
             final_path = self.export_path + fname
             df_crf = pd.DataFrame(crf_data)
             df_crf.to_csv(final_path, encoding='utf-8', index=False)
+
+    def construct_crf_data(
+            self, crf_data=[], crf_data_dict={}, crf_name=None, study=None):
+        crf_cls = self.get_model_cls(study, crf_name)
+        objs = crf_cls.objects.all()
+        count = 0
+        for crf_obj in objs:
+            data = self.format_export_data(crf_obj, crf_data_dict)
+            crf_data.append(data)
+            count += 1
+
+    def get_model_cls(self, app_name, crf_name):
+        return django_apps.get_model(app_name, crf_name)
+
+    def remove_exclude_fields(self, data={}):
+        for e_field in exclude_fields:
+            try:
+                del data[e_field]
+            except KeyError:
+                pass
+        return data
+
+    def format_export_data(self, crf_obj=None, crf_data_dict={}):
+        temp_data = crf_data_dict(crf_obj=crf_obj)
+        data = self.export_methods_cls.fix_date_format(obj_dict=temp_data)
+        data = self.remove_exclude_fields(data)
+        return data
+
+    def combine_crf_data(
+            self, crf_data=[], crf_data_dict={}, crf_list=[], study=None):
+        crf_cls = self.get_model_cls(study, crf_list[0])
+        objs = crf_cls.objects.all()
+        for crf_obj in objs:
+            data = self.format_export_data(crf_obj, crf_data_dict)
+
+            visit = getattr(crf_obj, 'visit', None)
+            visit_attr = crf_obj.visit_model_attr()
+            for crf_name in crf_list[1:]:
+                crf_cls = self.get_model_cls(study, crf_name)
+                try:
+                    obj = crf_cls.objects.get(**{f'{visit_attr}': visit})
+                except crf_cls.DoesNotExist:
+                    continue
+                else:
+                    combine_data = self.format_export_data(obj, crf_data_dict)
+                    data.update(combine_data)
+            crf_data.append(data)
 
     def export_inline_crfs(self, inlines_dict=None, crf_data_dict=None, study=None):
         """Export Inline data.

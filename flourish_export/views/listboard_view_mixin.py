@@ -13,12 +13,9 @@ from edc_base.utils import get_utcnow
 from ..export_data_mixin import ExportDataMixin
 from ..export_methods import ExportMethods
 from ..export_model_lists import (
-    caregiver_crfs_list, caregiver_inlines_dict, caregiver_many_to_many_crf,
-    child_inlines_dict, child_crf_list, child_many_to_many_crf,
-    child_model_list, caregiver_model_list, death_report_prn_model_list,
-    offstudy_prn_model_list, caregiver_many_to_many_non_crf)
-from ..export_model_lists import (follow_model_list, follow_model_many_to_many,
-                                  follow_model_inlines_dict)
+    caregiver_crfs_list, child_crf_list, child_model_list, caregiver_model_list,
+    death_report_prn_model_list, offstudy_prn_model_list)
+from ..export_model_lists import follow_model_list
 from ..export_non_crfs import ExportNonCrfData
 from ..models import ExportFile
 
@@ -33,14 +30,6 @@ class ListBoardViewMixin:
                 crf_list=caregiver_crfs_list,
                 crf_data_dict=ExportMethods().caregiver_crf_data_dict,
                 study='flourish_caregiver')
-            export_crf_data.export_inline_crfs(
-                inlines_dict=caregiver_inlines_dict,
-                crf_data_dict=ExportMethods().caregiver_crf_data_dict,
-                study='flourish_caregiver')
-            export_crf_data.generate_m2m_crf(
-                m2m_class=caregiver_many_to_many_crf,
-                crf_data_dict=ExportMethods().caregiver_crf_data_dict,
-                study='flourish_caregiver')
 
     def export_child_data(self, export_path=None):
         """Export child data.
@@ -48,14 +37,6 @@ class ListBoardViewMixin:
         export_crf_data = ExportDataMixin(export_path=export_path)
         export_crf_data.export_crfs(
             crf_list=child_crf_list,
-            crf_data_dict=ExportMethods().child_crf_data,
-            study='flourish_child')
-        export_crf_data.export_inline_crfs(
-            inlines_dict=child_inlines_dict,
-            crf_data_dict=ExportMethods().child_crf_data,
-            study='flourish_child')
-        ExportDataMixin(export_path=export_path).generate_m2m_crf(
-            m2m_class=child_many_to_many_crf,
             crf_data_dict=ExportMethods().child_crf_data,
             study='flourish_child')
 
@@ -70,17 +51,13 @@ class ListBoardViewMixin:
             caregiver_model_list=caregiver_model_list,
             study='flourish_caregiver')
 
-        non_crf_data.caregiver_m2m_non_crf(
-            caregiver_many_to_many_non_crf=caregiver_many_to_many_non_crf,
-            study='flourish_caregiver')
         non_crf_data.follow_models(
             follow_model_list=follow_model_list,
             study='flourish_follow')
-        non_crf_data.follow_m2m(
-            many_to_many_models=follow_model_many_to_many,
-            study='flourish_follow')
+ 
         non_crf_data.child_visit()
         non_crf_data.caregiver_visit()
+
         non_crf_data.offstudy(offstudy_prn_model_list=offstudy_prn_model_list)
 
     def export_requisitions(self, caregiver_export_path=None, child_export_path=None):
@@ -113,8 +90,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = 'documents/' + export_identifier + '_flourish_export_' + today_date + '.zip'
-            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_export_' + today_date
+            zipped_file_path = 'documents/' + export_identifier + '_flourish_all_export_' + today_date + '.zip'
+            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_all_export_' + today_date
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
@@ -169,8 +146,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = f'documents/{export_identifier}_flourish_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_export_{today_date}'
+            zipped_file_path = f'documents/{export_identifier}_flourish_child_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_child_export_{today_date}'
 
             export_path = dir_to_zip + '/child/'
             self.export_child_data(export_path=export_path)
@@ -213,8 +190,8 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = f'documents/{export_identifier}_flourish_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_export_{today_date}'
+            zipped_file_path = f'documents/{export_identifier}_flourish_caregiver_export_{today_date}.zip'
+            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_caregiver_export_{today_date}'
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)

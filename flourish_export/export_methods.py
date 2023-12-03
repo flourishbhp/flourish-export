@@ -1,13 +1,15 @@
 import datetime
 import re
 from unittest import result
+from pytz import timezone
 
 from django.apps import apps as django_apps
 from django.core.exceptions import ValidationError
 from django_crypto_fields.fields import (
     EncryptedCharField, EncryptedDecimalField, EncryptedIntegerField,
     EncryptedTextField, FirstnameField, IdentityField, LastnameField)
-from pytz import timezone
+
+from .export_model_lists import exclude_inline_fields
 
 encrypted_fields = [
     EncryptedCharField, EncryptedDecimalField, EncryptedIntegerField,
@@ -87,7 +89,7 @@ class ExportMethods:
         Format: m/d/y
         """
 
-        result_dict_obj = {**obj_dict}
+        result_dict_obj = {}
         for key, value in obj_dict.items():
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(timezone('Africa/Gaborone'))
@@ -100,11 +102,13 @@ class ExportMethods:
                 value = value.strftime('%m/%d/%Y')
                 new_key = re.sub('time', '', key)
                 result_dict_obj[new_key] = value
-                del result_dict_obj[key]
                 result_dict_obj[time_variable] = time_value
+                continue
             elif isinstance(value, datetime.date):
                 value = value.strftime('%m/%d/%Y')
                 result_dict_obj[key] = value
+                continue
+            result_dict_obj[key] = value
         return result_dict_obj
 
     def caregiver_crf_data_dict(self, crf_obj=None):
@@ -142,6 +146,44 @@ class ExportMethods:
                 subject_type=rs.subject_type,
                 registration_datetime=rs.registration_datetime,
             )
+        data.update(self.m2m_data_dict(crf_obj))
+        data.update(self.inline_data_dict(crf_obj))
+        return data
+
+    def m2m_data_dict(self, model_obj=None, inline_count=None):
+        data = {}
+        m2m_fields = model_obj._meta.many_to_many
+        for field in m2m_fields:
+            model_cls = field.related_model
+            choices = self.m2m_list_data(model_cls=model_cls)
+            key_manager = getattr(model_obj, field.name)
+            for choice in choices:
+                field_name = f'{field.name}__{choice}'
+                field_name = f'{field_name}__{inline_count}' if inline_count else field_name
+                data[field_name] = 0
+                try:
+                    key_manager.get(short_name=choice)
+                except model_cls.DoesNotExist:
+                    continue
+                else:
+                    data[field_name] = 1
+        return data
+
+    def inline_data_dict(self, model_obj):
+        data = {}
+        inline_fields = model_obj._meta.related_objects
+        for field in inline_fields:
+            key_manager = getattr(model_obj, f'{field.name}_set',
+                                  getattr(model_obj, f'{field.related_name}', None))
+            field_id = field.field.attname
+            exclude_inline_fields.append(field_id)
+            if key_manager:
+                inline_values = key_manager.all()
+                for count, obj in enumerate(inline_values):
+                    inline_data = obj.__dict__
+                    inline_data = {f'{key}__{count}': value for key, value in inline_data.items() if key not in exclude_inline_fields}
+                    inline_data.update(self.m2m_data_dict(obj, str(count)))
+                    data.update(inline_data)
         return data
 
     def child_crf_data(self, crf_obj=None):
@@ -182,6 +224,8 @@ class ExportMethods:
                 registration_datetime=rs.registration_datetime,
                 caregiver_identifier=rs.relative_identifier
             )
+        data.update(self.m2m_data_dict(crf_obj))
+        data.update(self.inline_data_dict(crf_obj))
         return data
 
     def non_crf_obj_dict(self, obj=None):
@@ -224,10 +268,18 @@ class ExportMethods:
                 gender=None,
 
             )
-
+        data.update(self.m2m_data_dict(obj))
+        data.update(self.inline_data_dict(obj))
         return data
 
     def follow_data_dict(self, model_obj=None):
         data = model_obj.__dict__
         data = self.encrypt_values(obj_dict=data, obj_cls=model_obj.__class__)
+        data.update(self.m2m_data_dict(model_obj))
+        data.update(self.inline_data_dict(model_obj))
         return data
+
+    def m2m_list_data(self, model_cls=None):
+        qs = model_cls.objects.order_by(
+            'created').values_list('short_name', flat=True)
+        return list(qs)
