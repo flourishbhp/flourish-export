@@ -1,14 +1,19 @@
-import datetime
+import datetime, time, threading
 import pandas as pd
 
+from django.apps import apps as django_apps
+from django.core.management.base import CommandError
 from django.db.models.fields.reverse_related import OneToOneRel
 from django.http import HttpResponse
 from django.utils import timezone
+from edc_base.model_mixins import ListModelMixin
 from io import BytesIO
 
 class AdminExportHelper:
     """ Flourish export methods to be re-used in the export model admin mixin.
     """
+
+    exclude_fields = []
 
     @property
     def get_model_fields(self):
@@ -112,3 +117,55 @@ class AdminExportHelper:
         date_str = datetime.datetime.now().strftime('%Y-%m-%d')
         filename = "%s-%s" % (self.model.__name__, date_str)
         return filename
+
+    def get_app_list(self, app_label=None):
+        """ Returns all models registered to a specific app_label
+            @param app_label: installed app label
+            @return: list of all registered models 
+        """
+        try:
+            app_config = django_apps.get_app_config(app_label)
+        except LookupError as e:
+            raise CommandError(str(e))
+        else:
+            return app_config.models
+
+    def exclude_rel_models(self, model_cls):
+        """ Restrict the export to only CRFs and enrolment forms, excludes m2m,
+            inlines and any other relationship models that will be included as
+            part of the main parent data.
+            @param app_list: dictionary of model_name: model_cls
+        """
+        exclude = False
+        # Check model class is m2m, skip
+        if issubclass(model_cls, ListModelMixin):
+            exclude = True
+        intermediate_model = model_cls._meta.verbose_name.endswith(
+            'relationship')
+        if intermediate_model:
+            exclude = True
+        return exclude
+
+    def remove_exclude_models(self, app_list):
+        app_list = {key: value._meta.label_lower for key, value in app_list.items() if not self.exclude_rel_models(value)}
+        return app_list
+
+    def stop_export_thread(self, app_label):
+        """ Stop export file generation thread.
+        """
+        time.sleep(20)
+        thread_name = f'{app_label}_export'
+
+        threads = threading.enumerate()
+        threads = [t for t in threads if t.is_alive() and t.name == thread_name]
+        for thread in threads:
+            thread._stop()
+
+    def start_export_thread(self, thread_name, thread_target, app_label):
+        """ Start export file generation thread.
+        """
+        download_thread = threading.Thread(
+            name=thread_name,
+            target=thread_target,
+            args=(app_label, ))
+        download_thread.start()
