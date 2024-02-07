@@ -1,12 +1,11 @@
-import datetime
 import threading
-import time
-
 from django.contrib import messages
 from django.views.generic import TemplateView
 from edc_base.view_mixins import EdcBaseViewMixin
 from edc_navbar import NavbarViewMixin
 
+from ..admin_export_helper import AdminExportHelper
+from ..tasks import generate_exports
 from ..identifiers import ExportIdentifier
 from ..models import ExportFile
 from .listboard_view_mixin import ListBoardViewMixin
@@ -19,87 +18,56 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
     navbar_name = 'flourish_export'
     navbar_selected_item = 'study_data_export'
     identifier_cls = ExportIdentifier
-
-    def stop_main_thread(self, thread_name):
-        """Stop export file generation thread.
-        """
-        time.sleep(20)
-        threads = threading.enumerate()
-        threads = [t for t in threads if t.is_alive()]
-        for thread in threads:
-            if thread.name == thread_name:
-                thread._stop()
+    admin_helper_cls = AdminExportHelper
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
         download = self.request.GET.get('download')
 
-        if download == '2':
-            self.generate_export(thread_name='flourish_non_crf_export',
-                                 thread_target=self.download_non_crf_data,
-                                 description='Flourish Non CRF Export')
-        elif download == '3':
-            self.generate_export(thread_name='flourish_caregiver_crf_export',
-                                 thread_target=self.download_caregiver_data,
-                                 description='Flourish Caregiver CRF Export')
+        if download == '3':   
+            self.acquire_export_lock(app_label='flourish_caregiver')
         elif download == '4':
-            self.generate_export(thread_name='flourish_child_crf_export',
-                                 thread_target=self.download_child_data,
-                                 description='Flourish Child CRF Export')
-        non_crf_exports = ExportFile.objects.filter(
-            description='Flourish Non CRF Export').order_by('-uploaded_at')[:10]
+            self.acquire_export_lock(app_label='flourish_child')
+
         caregiver_crf_exports = ExportFile.objects.filter(
-            description='Flourish Caregiver CRF Export').order_by('-uploaded_at')[:10]
+            description='Flourish Caregiver Export(s)').order_by('-uploaded_at')[:10]
 
         child_crf_exports = ExportFile.objects.filter(
-            description='Flourish Child CRF Export').order_by('-uploaded_at')[:10]
+            description='Flourish Child Export(s)').order_by('-uploaded_at')[:10]
         context.update(
-            non_crf_exports=non_crf_exports,
             caregiver_crf_exports=caregiver_crf_exports,
             child_crf_exports=child_crf_exports)
         return context
 
-    def generate_export(self, thread_name=None, active_download=False,
-                        thread_target=None, description=None):
-
+    def acquire_export_lock(self, app_label, ):
+        thread_name = f'{app_label}_export'
         threads = threading.enumerate()
+        active_download = False
 
-        if threads:
-            for thread in threads:
-                if thread.name == thread_name:
-                    active_download = True
-                    messages.add_message(
-                        self.request, messages.INFO,
-                        (f'Download for {description} that was initiated is still running '
-                         'please wait until an export is fully prepared.'))
+        for thread in threads:
+            if thread.name == thread_name:
+                active_download = True
+                messages.add_message(
+                    self.request,
+                    messages.INFO,
+                    f'Download for {app_label.replace("_", " ").capitalize()} that was '
+                    'initiated is still running. Please wait until an export is fully prepared.')
 
         if not active_download:
-            is_clean = self.is_clean(description=description)
-            if is_clean:
+            self.admin_helper_cls().start_export_thread(
+                thread_name,
+                self.generate_export,
+                app_label)
+            messages.add_message(
+                self.request,
+                messages.INFO,
+                f'{app_label.replace("_", " ").capitalize()} export has been initiated, '
+                'an email will be sent once download completes.')
 
-                download_thread = threading.Thread(
-                    name=thread_name, target=thread_target,
-                    daemon=True)
-                download_thread.start()
-                last_doc = ExportFile.objects.filter(
-                    description=description,
-                    download_complete=True).order_by('created').last()
+    def generate_export(self, app_label, ):
+        app_list = self.admin_helper_cls().get_app_list(app_label)
+        app_list = self.admin_helper_cls().remove_exclude_models(app_list)
+        user_emails = [self.request.user.email]
 
-                if last_doc:
-                    start_time = datetime.datetime.now().strftime(
-                        "%d/%m/%Y %H:%M:%S")
-                    last_doc_time = round(
-                        float(last_doc.download_time) / 60.0, 2)
-
-                    messages.add_message(
-                        self.request, messages.INFO,
-                        (f'Download for {description} has been initiated, you will receive an email once '
-                         'the download is completed. Estimated download time: '
-                         f'{last_doc_time} minutes, file generation started at:'
-                         f' {start_time}'))
-                else:
-                    messages.add_message(
-                        self.request, messages.INFO,
-                        (f'Download for {description} initiated, you will receive an email once '
-                         'the download is completed.'))
+        generate_exports.delay(app_list, True, user_emails)
