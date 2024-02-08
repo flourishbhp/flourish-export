@@ -15,7 +15,7 @@ from .identifiers import ExportIdentifier
 admin_export_helper_cls = AdminExportHelper()
 
 
-@shared_task
+@shared_task(soft_time_limit=1700, time_limit=1800)
 def run_exports(model_cls, app_label):
     """ Executes the csv model export method from admin export action(s) and writes response
         content to an excel file.
