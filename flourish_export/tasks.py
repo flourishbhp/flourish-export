@@ -91,7 +91,8 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[]):
     except SoftTimeLimitExceeded:
         self.update_state(state='FAILURE')
         new_soft_time_limit = self.request.soft_time_limit + 3600
-        self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit)
+        new_time_limit = self.request.time_limit + 3600
+        self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
             
 @shared_task
 def zip_and_send_email(app_labels, user_emails):
