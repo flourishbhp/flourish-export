@@ -26,9 +26,9 @@ class HomeView(ListBoardViewMixin, EdcBaseViewMixin,
         download = self.request.GET.get('download')
 
         if download == '3':   
-            self.acquire_export_lock(app_label='flourish_caregiver')
+            self.generate_export(app_label='flourish_caregiver')
         elif download == '4':
-            self.acquire_export_lock(app_label='flourish_child')
+            self.generate_export(app_label='flourish_child')
 
         caregiver_crf_exports = ExportFile.objects.filter(
             description='Flourish Caregiver Export(s)').order_by('-uploaded_at')[:10]

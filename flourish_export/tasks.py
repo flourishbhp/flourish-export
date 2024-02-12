@@ -1,5 +1,6 @@
 import shutil, threading, os
 from celery import shared_task, group, chain
+from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as django_apps
 from django.core.mail import send_mail
 from django.conf import settings
@@ -15,7 +16,7 @@ from .identifiers import ExportIdentifier
 admin_export_helper_cls = AdminExportHelper()
 
 
-@shared_task(soft_time_limit=3500, time_limit=3600)
+@shared_task
 def run_exports(model_cls, app_label):
     """ Executes the csv model export method from admin export action(s) and writes response
         content to an excel file.
@@ -60,32 +61,37 @@ def run_exports(model_cls, app_label):
                 print(f'Empty response returned for {model_cls._meta.verbose_name}')
 
 
-@shared_task
-def generate_exports(app_list, create_zip=False, user_emails=[]):
+@shared_task(bind=True, soft_time_limit=7000, time_limit=7200)
+def generate_exports(self, app_list, create_zip=False, user_emails=[]):
 
     app_labels = set()
 
     # Create a list to store the group of export tasks
     export_tasks = []
 
-    for _, model_cls in app_list.items():
-        app_label = model_cls.split('.')[0]
-        app_labels.add(app_label)
-
-        # Call the export_data task asynchronously and store the task
-        export_tasks.append(run_exports.si(model_cls, app_label))
-
-    # Group all export tasks together
-    export_group = group(export_tasks)
-
-    # Change app_labels to list for serialization
-    app_labels = list(app_labels)
-    # Chain additional task for zipping and sending an email after exports are complete.
-    if create_zip:
-        chain(export_group,
-              zip_and_send_email.si(app_labels, user_emails)).delay()
-    else:
-        export_group.delay()
+    try:
+        for _, model_cls in app_list.items():
+            app_label = model_cls.split('.')[0]
+            app_labels.add(app_label)
+    
+            # Call the export_data task asynchronously and store the task
+            export_tasks.append(run_exports.si(model_cls, app_label))
+    
+        # Group all export tasks together
+        export_group = group(export_tasks)
+    
+        # Change app_labels to list for serialization
+        app_labels = list(app_labels)
+        # Chain additional task for zipping and sending an email after exports are complete.
+        if create_zip:
+            chain(export_group,
+                  zip_and_send_email.si(app_labels, user_emails)).delay()
+        else:
+            export_group.delay()
+    except SoftTimeLimitExceeded:
+        self.update_state(state='FAILURE')
+        new_soft_time_limit = self.request.soft_time_limit + 3600
+        self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit)
             
 @shared_task
 def zip_and_send_email(app_labels, user_emails):
