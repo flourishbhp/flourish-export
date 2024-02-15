@@ -1,4 +1,4 @@
-import datetime, time, threading
+import datetime
 import pandas as pd
 
 from django.apps import apps as django_apps
@@ -149,23 +149,3 @@ class AdminExportHelper:
     def remove_exclude_models(self, app_list):
         app_list = {key: value._meta.label_lower for key, value in app_list.items() if not self.exclude_rel_models(value)}
         return app_list
-
-    def stop_export_thread(self, app_label):
-        """ Stop export file generation thread.
-        """
-        time.sleep(20)
-        thread_name = f'{app_label}_export'
-
-        threads = threading.enumerate()
-        threads = [t for t in threads if t.is_alive() and t.name == thread_name]
-        for thread in threads:
-            thread._stop()
-
-    def start_export_thread(self, thread_name, thread_target, app_label):
-        """ Start export file generation thread.
-        """
-        download_thread = threading.Thread(
-            name=thread_name,
-            target=thread_target,
-            args=(app_label, ))
-        download_thread.start()
