@@ -1,4 +1,4 @@
-import shutil, threading, os
+import shutil, os
 from celery import shared_task, group, chain
 from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as django_apps
@@ -11,7 +11,7 @@ from flourish_child.admin_site import flourish_child_admin
 from flourish_facet.admin_site import flourish_facet_admin
 
 from .admin_export_helper import AdminExportHelper
-from .identifiers import ExportIdentifier
+from .models import ExportFile
 
 admin_export_helper_cls = AdminExportHelper()
 
@@ -62,7 +62,7 @@ def run_exports(model_cls, app_label):
 
 
 @shared_task(bind=True, soft_time_limit=7000, time_limit=7200)
-def generate_exports(self, app_list, create_zip=False, user_emails=[]):
+def generate_exports(self, app_list, create_zip=False, user_emails=[], export_identifier=None):
 
     app_labels = set()
 
@@ -85,7 +85,7 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[]):
         # Chain additional task for zipping and sending an email after exports are complete.
         if create_zip:
             chain(export_group,
-                  zip_and_send_email.si(app_labels, user_emails)).delay()
+                  zip_and_send_email.si(app_labels, user_emails, export_identifier)).delay()
         else:
             export_group.delay()
     except SoftTimeLimitExceeded:
@@ -95,10 +95,8 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[]):
         self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
             
 @shared_task
-def zip_and_send_email(app_labels, user_emails):
+def zip_and_send_email(app_labels, user_emails, export_identifier):
     for app_label in app_labels:
-        export_model_cls = django_apps.get_model('flourish_export.exportfile')
-        export_identifier = ExportIdentifier().identifier
 
         zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
         dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
@@ -107,34 +105,28 @@ def zip_and_send_email(app_labels, user_emails):
         # Zip the exported files
         if not os.path.isfile(dir_to_zip):
             shutil.make_archive(archive_name, 'zip', dir_to_zip)
-    
-        description = f'{app_label.replace("_", " ").title()} Export(s)'
-        model_options = {
-            'description': description,
-            'study': app_label,
-            'export_identifier': export_identifier,
-            'download_complete': True,
-            'document': f'{zip_folder}_{export_identifier}.zip'}
 
-        export_model_cls.objects.create(**model_options)
-    
-        subject = f'{export_identifier} {description}'
-        message = (f'{export_identifier} {description} have been successfully '
-                   'generated and ready for download. This is an automated message.')
-    
         try:
-            send_mail(subject=subject,
-                      message=message,
-                      from_email=settings.DEFAULT_FROM_EMAIL,
-                      recipient_list=user_emails,
-                      fail_silently=False)
-        except Exception as e:
-            print(f'Error sending email: {str(e)}')
+            pending_export = ExportFile.objects.get(
+                export_identifier=export_identifier)
+        except ExportFile.DoesNotExist:
+            raise Exception(f'{export_identifier} model obj does not exist')
+        else:
+            description = pending_export.description
+            subject = f'{export_identifier} {description}'
+            message = (f'{export_identifier} {description} have been successfully '
+                       'generated and ready for download. This is an automated message.')
+    
+            try:
+                send_mail(subject=subject,
+                          message=message,
+                          from_email=settings.DEFAULT_FROM_EMAIL,
+                          recipient_list=user_emails,
+                          fail_silently=False)
+            except Exception as e:
+                print(f'Error sending email: {str(e)}')
 
-@shared_task
-def release_export_lock(app_labels):
-    for app_label in app_labels:
-        threading.Thread(
-            target=admin_export_helper_cls.stop_export_thread,
-            args=(app_label, ),
-            daemon=True)
+            pending_export.download_complete = True
+            pending_export.document = f'{zip_folder}_{export_identifier}.zip'
+            pending_export.datetime_completed = get_utcnow()
+            pending_export.save()
