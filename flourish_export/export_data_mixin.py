@@ -30,6 +30,7 @@ class ExportDataMixin:
             else:
                 self.construct_crf_data(
                     crf_data, crf_data_dict, crf_name, study)
+                
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             fname = study + '_' + file_name + '_' + timestamp + '.csv'
             final_path = self.export_path + fname
@@ -42,7 +43,7 @@ class ExportDataMixin:
         objs = crf_cls.objects.all()
         count = 0
         for crf_obj in objs:
-            data = self.format_export_data(crf_obj, crf_data_dict)
+            data = self.format_export_data(crf_obj, crf_data_dict, crf_cls)
             crf_data.append(data)
             count += 1
 
@@ -57,18 +58,22 @@ class ExportDataMixin:
                 pass
         return data
 
-    def format_export_data(self, crf_obj=None, crf_data_dict={}):
+    def format_export_data(self, crf_obj=None, crf_data_dict={}, model_cls=None):
         temp_data = crf_data_dict(crf_obj=crf_obj)
         data = self.export_methods_cls.fix_date_format(obj_dict=temp_data)
         data = self.remove_exclude_fields(data)
+        if model_cls and 'cbcl' in model_cls._meta.model_name:
+            data = self.change_var_to_numeric(data, model_cls)
         return data
 
     def combine_crf_data(
             self, crf_data=[], crf_data_dict={}, crf_list=[], study=None):
-        crf_cls = self.get_model_cls(study, crf_list[0])
-        objs = crf_cls.objects.all()
+        """ Combine the data from multiple common forms. Example CBCL crfs with 4 sections
+        """
+        initial_crf_cls = self.get_model_cls(study, crf_list[0])
+        objs = initial_crf_cls.objects.all()
         for crf_obj in objs:
-            data = self.format_export_data(crf_obj, crf_data_dict)
+            data = self.format_export_data(crf_obj, crf_data_dict, initial_crf_cls)
 
             visit = getattr(crf_obj, 'visit', None)
             visit_attr = crf_obj.visit_model_attr()
@@ -79,10 +84,30 @@ class ExportDataMixin:
                 except crf_cls.DoesNotExist:
                     continue
                 else:
-                    combine_data = self.format_export_data(obj, crf_data_dict)
+                    combine_data = self.format_export_data(obj, crf_data_dict, crf_cls)
                     data.update(combine_data)
             crf_data.append(data)
 
+    def change_var_to_numeric(self, data={}, model_cls=None):
+        """ Replace data dictionary key with numeric representation of the field,
+            defined on the help text. NOTE: method was defined based off cbcl forms.
+            @param data: dictionary for model data
+            @param model_cls: class model
+            @return: updated data with numeric representation for the fields
+        """
+        model_fields = model_cls._meta.get_fields()
+        for field in model_fields:
+            numeric_text = None
+            is_digit = any(char.isdigit() for char in field.help_text)
+            if bool(field.help_text) and is_digit:
+                numeric_text = field.help_text.replace('(', '')
+                numeric_text = numeric_text.replace(')', '')
+                try:
+                    data[numeric_text] = data.pop(field.name)
+                except KeyError:
+                    continue
+        return data
+        
     def export_inline_crfs(self, inlines_dict=None, crf_data_dict=None, study=None):
         """Export Inline data.
         """
