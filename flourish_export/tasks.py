@@ -51,9 +51,11 @@ def run_exports(model_cls, app_label):
 
             if response:
                 if response.status_code == 200:
+                    content_type = response._headers.get('content-type', ('', ''))[1]
+                    file_ext = 'csv' if content_type == admin_export_helper_cls.csv_content_type else 'xlsx'
                     if not os.path.exists(file_path):
                         os.makedirs(file_path)
-                    with open(f'{file_path}/{model_admin_cls.get_export_filename()}.xlsx', 'wb') as file:
+                    with open(f'{file_path}/{model_admin_cls.get_export_filename()}.{file_ext}', 'wb') as file:
                         file.write(response.content)
                 else:
                     response.raise_for_status()

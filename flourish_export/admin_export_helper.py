@@ -13,7 +13,9 @@ class AdminExportHelper:
     """ Flourish export methods to be re-used in the export model admin mixin.
     """
 
-    exclude_fields = []
+    exclude_fields = ['created', '_state', 'hostname_created', 'hostname_modified',
+                      'revision', 'device_created', 'device_modified', 'id', 'site_id',
+                      'modified', 'form_as_json', 'slug', ]
 
     @property
     def get_model_fields(self):
@@ -88,11 +90,29 @@ class AdminExportHelper:
         # Create an HTTP response with the Excel file as an attachment
         response = HttpResponse(
             workbook,
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            content_type=self.excel_content_type
         )
 
         response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.xlsx'
         return response
+
+    @property
+    def excel_content_type(self):
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+    def write_to_csv(self, records=[]):
+        """ Write data to csv format and returns response
+        """
+        df = pd.DataFrame(records)
+
+        response = HttpResponse(content_type=self.csv_content_type)
+        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.csv'
+        df.to_csv(path_or_buf=response, index=False)
+        return response
+
+    @property
+    def csv_content_type(self):
+        return 'text/csv'
 
     def fix_date_formats(self, data={}):
         for key, value in data.items():
