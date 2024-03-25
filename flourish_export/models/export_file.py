@@ -2,6 +2,7 @@ from django.contrib.sites.models import Site
 from django.db import models
 
 from edc_base.model_mixins import BaseUuidModel
+from edc_base.utils import get_utcnow
 
 from edc_base.sites import SiteModelMixin
 from edc_search.model_mixins import SearchSlugManager
@@ -54,8 +55,18 @@ class ExportFile(SiteModelMixin, SearchSlugModelMixin, BaseUuidModel):
         max_digits=10,
         decimal_places=2)
 
+    datetime_started = models.DateTimeField(default=get_utcnow)
+
+    datetime_completed = models.DateTimeField(default=get_utcnow)
+
     download_complete = models.BooleanField(
         default=False,)
+
+    def save(self, *args, **kwargs):
+        if self.datetime_started and self.datetime_completed:
+            difference = self.datetime_completed - self.datetime_started
+            self.download_time = round(difference.total_seconds() / 60, 2)     
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.export_identifier}'
