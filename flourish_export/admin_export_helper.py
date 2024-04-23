@@ -93,7 +93,7 @@ class AdminExportHelper:
             content_type=self.excel_content_type
         )
 
-        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.csv'
         return response
 
     @property
