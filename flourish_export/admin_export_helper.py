@@ -9,19 +9,21 @@ from django.utils import timezone
 from edc_base.model_mixins import ListModelMixin
 from io import BytesIO
 
+
 class AdminExportHelper:
     """ Flourish export methods to be re-used in the export model admin mixin.
     """
 
-    exclude_fields = ['created', '_state', 'hostname_created', 'hostname_modified',
-                      'revision', 'device_created', 'device_modified', 'id', 'site_id',
-                      'modified', 'form_as_json', 'slug', ]
+    exclude_fields = ['_state', 'hostname_created', 'hostname_modified',
+                      'revision', 'device_created', 'device_modified', 'id',
+                      'site_id', 'modified', 'form_as_json', 'slug', ]
 
     @property
     def get_model_fields(self):
         return [field for field in self.model._meta.get_fields()
                 if field.name not in self.exclude_fields and not isinstance(field,
                                                                             OneToOneRel)]
+
     def m2m_data_dict(self, obj, field, inline_count=None):
         """ Retrieve all choice variables for m2m field and assign either 0 or 1
             indicating selection of the variable response or not respectively.

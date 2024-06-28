@@ -30,7 +30,7 @@ class ExportDataMixin:
             else:
                 self.construct_crf_data(
                     crf_data, crf_data_dict, crf_name, study)
-                
+
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             fname = study + '_' + file_name + '_' + timestamp + '.csv'
             final_path = self.export_path + fname
@@ -107,7 +107,7 @@ class ExportDataMixin:
                 except KeyError:
                     continue
         return data
-        
+
     def export_inline_crfs(self, inlines_dict=None, crf_data_dict=None, study=None):
         """Export Inline data.
         """
