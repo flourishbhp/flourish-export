@@ -39,7 +39,7 @@ class ExportFile(SiteModelMixin, SearchSlugModelMixin, BaseUuidModel):
 
     site = models.ForeignKey(
         Site, on_delete=models.PROTECT,
-        related_name='django_site', 
+        related_name='django_site',
         null=True, editable=False)
 
     study = models.CharField(max_length=100, blank=True)
