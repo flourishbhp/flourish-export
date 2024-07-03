@@ -21,7 +21,7 @@ def run_exports(model_cls, app_label):
     """ Executes the csv model export method from admin export action(s) and writes response
         content to an excel file.
         @param model_cls: Specific model class definition
-        @param app_label: Specific app label for the model class 
+        @param app_label: Specific app label for the model class
     """
     admin_site_map = {'flourish_child': flourish_child_admin,
                       'flourish_caregiver': flourish_caregiver_admin,
@@ -75,13 +75,13 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[], export_id
         for _, model_cls in app_list.items():
             app_label = model_cls.split('.')[0]
             app_labels.add(app_label)
-    
+
             # Call the export_data task asynchronously and store the task
             export_tasks.append(run_exports.si(model_cls, app_label))
-    
+
         # Group all export tasks together
         export_group = group(export_tasks)
-    
+
         # Change app_labels to list for serialization
         app_labels = list(app_labels)
         # Chain additional task for zipping and sending an email after exports are complete.
@@ -95,7 +95,8 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[], export_id
         new_soft_time_limit = self.request.soft_time_limit + 3600
         new_time_limit = self.request.time_limit + 3600
         self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
-            
+
+
 @shared_task
 def zip_and_send_email(app_labels, user_emails, export_identifier):
     for app_label in app_labels:
@@ -103,7 +104,7 @@ def zip_and_send_email(app_labels, user_emails, export_identifier):
         zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
         dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
         archive_name = f'{dir_to_zip}_{export_identifier}'
-    
+
         # Zip the exported files
         if not os.path.isfile(dir_to_zip):
             shutil.make_archive(archive_name, 'zip', dir_to_zip)
@@ -118,7 +119,7 @@ def zip_and_send_email(app_labels, user_emails, export_identifier):
             subject = f'{export_identifier} {description}'
             message = (f'{export_identifier} {description} have been successfully '
                        'generated and ready for download. This is an automated message.')
-    
+
             try:
                 send_mail(subject=subject,
                           message=message,

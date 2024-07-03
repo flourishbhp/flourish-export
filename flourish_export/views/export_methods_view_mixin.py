@@ -2,6 +2,7 @@ from django.contrib import messages
 from ..models import ExportFile
 from ..tasks import generate_exports
 
+
 class ExportMethodsViewMixin:
 
     def create_export_obj(self, app_label, ):
@@ -15,7 +16,7 @@ class ExportMethodsViewMixin:
 
         ExportFile.objects.create(**model_options)
         return export_identifier
-        
+
     def generate_export(self, app_label, user_emails=[]):
         app_list = self.admin_helper_cls().get_app_list(app_label)
         app_list = self.admin_helper_cls().remove_exclude_models(app_list)
@@ -34,5 +35,5 @@ class ExportMethodsViewMixin:
             message = (f'Download for {app_label.replace("_", " ").capitalize()} '
                        'that was initiated is still running. Please wait until an '
                        'export is fully prepared.')
-                
+
         messages.add_message(self.request, messages.INFO, message)
