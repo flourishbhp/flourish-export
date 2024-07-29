@@ -9,6 +9,7 @@ from edc_base.utils import get_utcnow
 from flourish_caregiver.admin_site import flourish_caregiver_admin
 from flourish_child.admin_site import flourish_child_admin
 from flourish_facet.admin_site import flourish_facet_admin
+from flourish_prn.admin_site import flourish_prn_admin
 
 from .admin_export_helper import AdminExportHelper
 from .models import ExportFile
@@ -25,6 +26,7 @@ def run_exports(model_cls, app_label):
     """
     admin_site_map = {'flourish_child': flourish_child_admin,
                       'flourish_caregiver': flourish_caregiver_admin,
+                      'flourish_prn': flourish_prn_admin,
                       'flourish_facet': flourish_facet_admin}
 
     model_cls = django_apps.get_model(model_cls)

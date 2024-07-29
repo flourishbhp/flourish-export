@@ -1,7 +1,4 @@
-import datetime
 import re
-import threading
-import time
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -14,14 +11,18 @@ from edc_dashboard.view_mixins import ListboardFilterViewMixin, SearchFormViewMi
 from edc_dashboard.views import ListboardView
 from edc_navbar import NavbarViewMixin
 
+from ..admin_export_helper import AdminExportHelper
 from ..identifiers import ExportIdentifier
 from ..model_wrappers import ExportFileModelWrapper
 from ..models import ExportFile
+from ..tasks import generate_exports
 from .listboard_view_mixin import ListBoardViewMixin
+from .export_methods_view_mixin import ExportMethodsViewMixin
 
 
-class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
-                    ListboardFilterViewMixin, SearchFormViewMixin, ListboardView):
+class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ExportMethodsViewMixin,
+                    ListBoardViewMixin, ListboardFilterViewMixin,
+                    SearchFormViewMixin, ListboardView):
 
     listboard_template = 'export_listboard_template'
     listboard_url = 'export_listboard_url'
@@ -30,7 +31,8 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
 
     model = 'flourish_export.exportfile'
     model_wrapper_cls = ExportFileModelWrapper
-    identifier_cls = ExportIdentifier
+    export_identifier_cls = ExportIdentifier
+    admin_helper_cls = AdminExportHelper
     navbar_name = 'flourish_export'
     navbar_selected_item = 'export_data'
     ordering = '-modified'
@@ -42,72 +44,48 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ListBoardViewMixin,
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
-    def stop_main_thread(self, thread_name):
-        """Stop export file generation thread.
-        """
-        time.sleep(20)
-        threads = threading.enumerate()
-        threads = [t for t in threads if t.is_alive()]
-        for thread in threads:
-            if thread.name == thread_name:
-                thread._stop()
-
     def get_context_data(self, **kwargs):
 
         context = super().get_context_data(**kwargs)
         download = self.request.GET.get('download')
 
         if download == '1':
-            self.generate_export(thread_name='flourish_all_export',
-                                 thread_target=self.download_all_data,
-                                 description='Flourish All Export')
+            self.generate_export()
 
         context.update(export_add_url=self.model_cls().get_absolute_url())
         return context
 
-    def generate_export(self, thread_name=None, active_download=False,
-                        thread_target=None, description=None):
+    def generate_app_list(self, app_label, existing_app_list):
+        """ Get the app list mapping for the specific app_label and update
+            the models to the main app list.
+        """
+        app_list = self.admin_helper_cls().get_app_list(app_label)
+        app_list = self.admin_helper_cls().remove_exclude_models(app_list)
+        existing_app_list.update(app_list)
 
-        threads = threading.enumerate()
+    def generate_export(self):
+        app_list = {}
+        app_labels = ['flourish_caregiver', 'flourish_child', 'flourish_prn', ]
+        user_emails = self.request.user.email
 
-        if threads:
-            for thread in threads:
-                if thread.name == thread_name:
-                    active_download = True
-                    messages.add_message(
-                        self.request, messages.INFO,
-                        (f'Download for {description} that was initiated is still running '
-                         'please wait until an export is fully prepared.'))
-
-        if not active_download:
-            is_clean = self.is_clean(description=description)
-            if is_clean:
-
-                download_thread = threading.Thread(
-                    name=thread_name, target=thread_target,
-                    daemon=True)
-                download_thread.start()
-                last_doc = ExportFile.objects.filter(
-                    description=description,
-                    download_complete=True).order_by('created').last()
-
-                if last_doc:
-                    start_time = datetime.datetime.now().strftime(
-                        "%d/%m/%Y %H:%M:%S")
-                    last_doc_time = round(
-                        float(last_doc.download_time) / 60.0, 2)
-
-                    messages.add_message(
-                        self.request, messages.INFO,
-                        (f'Download for {description} has been initiated, you will receive an email once '
-                         'the download is completed. Estimated download time: '
-                         f'{last_doc_time} minutes, file generation started at:'
-                         f' {start_time}'))
-                else:
-                    messages.add_message(
-                        self.request, messages.INFO,
-                        (f'Download for {description} initiated, you will receive an email once '
-                         'the download is completed.'))
+        for app_label in app_labels:
+            self.generate_app_list(app_label, app_list)
+        try:
+            ExportFile.objects.get(study='flourish',
+                                   description='Flourish All Export',
+                                   download_complete=False)
+        except ExportFile.DoesNotExist:
+            export_identifier = self.create_export_obj(
+                app_label='flourish', description='Flourish All Export')
+            generate_exports.delay(app_list, True, user_emails, export_identifier)
+            message = (
+                f'Full flourish data export has been '
+                'initiated, an email will be sent once download completes.')
+        else:
+            message = (f'Download for flourish full data export '
+                       'that was initiated is still running. Please wait until an '
+                       'export is fully prepared.')
+        messages.add_message(self.request, messages.INFO, message)
 
     def get_queryset_filter_options(self, request, *args, **kwargs):
         options = super().get_queryset_filter_options(request, *args, **kwargs)
