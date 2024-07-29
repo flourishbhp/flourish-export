@@ -5,10 +5,10 @@ from ..tasks import generate_exports
 
 class ExportMethodsViewMixin:
 
-    def create_export_obj(self, app_label, ):
+    def create_export_obj(self, app_label, description=None):
         export_identifier = self.export_identifier_cls().identifier
 
-        description = f'{app_label.replace("_", " ").title()} Export(s)'
+        description = description or f'{app_label.replace("_", " ").title()} Export(s)'
         model_options = {
             'description': description,
             'study': app_label,
