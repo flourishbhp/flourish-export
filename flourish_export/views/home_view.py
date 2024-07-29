@@ -24,7 +24,7 @@ class HomeView(ExportMethodsViewMixin,
 
         download = self.request.GET.get('download')
 
-        if download == '3':   
+        if download == '3':
             self.generate_export(app_label='flourish_caregiver')
         elif download == '4':
             self.generate_export(app_label='flourish_child')
