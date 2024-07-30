@@ -18,7 +18,7 @@ admin_export_helper_cls = AdminExportHelper()
 
 
 @shared_task
-def run_exports(model_cls, app_label):
+def run_exports(model_cls, app_label, full_export=False):
     """ Executes the csv model export method from admin export action(s) and writes response
         content to an excel file.
         @param model_cls: Specific model class definition
@@ -43,6 +43,9 @@ def run_exports(model_cls, app_label):
     else:
         file_path = f'media/admin_exports/{app_label}_{get_utcnow().date()}'
 
+        if full_export:
+            file_path = f'media/admin_exports/flourish_{get_utcnow().date()}'
+
         if hasattr(model_admin_cls, 'export_as_csv'):
             """
             Can be used to exclude some models not needed in the exports
@@ -66,7 +69,8 @@ def run_exports(model_cls, app_label):
 
 
 @shared_task(bind=True, soft_time_limit=7000, time_limit=7200)
-def generate_exports(self, app_list, create_zip=False, user_emails=[], export_identifier=None):
+def generate_exports(self, app_list, create_zip=False, full_export=False, user_emails=[],
+                     export_identifier=None):
 
     app_labels = set()
 
@@ -79,13 +83,13 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[], export_id
             app_labels.add(app_label)
 
             # Call the export_data task asynchronously and store the task
-            export_tasks.append(run_exports.si(model_cls, app_label))
+            export_tasks.append(run_exports.si(model_cls, app_label, full_export))
 
         # Group all export tasks together
         export_group = group(export_tasks)
 
         # Change app_labels to list for serialization
-        app_labels = list(app_labels)
+        app_labels = list(app_labels) if not full_export else ['flourish', ]
         # Chain additional task for zipping and sending an email after exports are complete.
         if create_zip:
             chain(export_group,
@@ -102,36 +106,39 @@ def generate_exports(self, app_list, create_zip=False, user_emails=[], export_id
 @shared_task
 def zip_and_send_email(app_labels, user_emails, export_identifier):
     for app_label in app_labels:
+        create_zip_and_email(app_label, export_identifier, user_emails)
 
-        zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
-        dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
-        archive_name = f'{dir_to_zip}_{export_identifier}'
 
-        # Zip the exported files
-        if not os.path.isfile(dir_to_zip):
-            shutil.make_archive(archive_name, 'zip', dir_to_zip)
+def create_zip_and_email(app_label, export_identifier, user_emails):
+    zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
+    dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
+    archive_name = f'{dir_to_zip}_{export_identifier}'
+
+    # Zip the exported files
+    if not os.path.isfile(dir_to_zip):
+        shutil.make_archive(archive_name, 'zip', dir_to_zip)
+
+    try:
+        pending_export = ExportFile.objects.get(
+            export_identifier=export_identifier)
+    except ExportFile.DoesNotExist:
+        raise Exception(f'{export_identifier} model obj does not exist')
+    else:
+        description = pending_export.description
+        subject = f'{export_identifier} {description}'
+        message = (f'{export_identifier} {description} have been successfully '
+                   'generated and ready for download. This is an automated message.')
 
         try:
-            pending_export = ExportFile.objects.get(
-                export_identifier=export_identifier)
-        except ExportFile.DoesNotExist:
-            raise Exception(f'{export_identifier} model obj does not exist')
-        else:
-            description = pending_export.description
-            subject = f'{export_identifier} {description}'
-            message = (f'{export_identifier} {description} have been successfully '
-                       'generated and ready for download. This is an automated message.')
+            send_mail(subject=subject,
+                      message=message,
+                      from_email=settings.DEFAULT_FROM_EMAIL,
+                      recipient_list=user_emails,
+                      fail_silently=False)
+        except Exception as e:
+            print(f'Error sending email: {str(e)}')
 
-            try:
-                send_mail(subject=subject,
-                          message=message,
-                          from_email=settings.DEFAULT_FROM_EMAIL,
-                          recipient_list=user_emails,
-                          fail_silently=False)
-            except Exception as e:
-                print(f'Error sending email: {str(e)}')
-
-            pending_export.download_complete = True
-            pending_export.document = f'{zip_folder}_{export_identifier}.zip'
-            pending_export.datetime_completed = get_utcnow()
-            pending_export.save()
+        pending_export.download_complete = True
+        pending_export.document = f'{zip_folder}_{export_identifier}.zip'
+        pending_export.datetime_completed = get_utcnow()
+        pending_export.save()
