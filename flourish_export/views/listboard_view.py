@@ -66,7 +66,7 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ExportMethodsViewMixin,
     def generate_export(self):
         app_list = {}
         app_labels = ['flourish_caregiver', 'flourish_child', 'flourish_prn', ]
-        user_emails = self.request.user.email
+        user_emails = [self.request.user.email, ]
 
         for app_label in app_labels:
             self.generate_app_list(app_label, app_list)
@@ -77,7 +77,8 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ExportMethodsViewMixin,
         except ExportFile.DoesNotExist:
             export_identifier = self.create_export_obj(
                 app_label='flourish', description='Flourish All Export')
-            generate_exports.delay(app_list, True, user_emails, export_identifier)
+            generate_exports.delay(app_list, True, True, user_emails,
+                                   export_identifier)
             message = (
                 f'Full flourish data export has been '
                 'initiated, an email will be sent once download completes.')
