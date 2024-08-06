@@ -27,7 +27,7 @@ class ExportMethodsViewMixin:
                                    download_complete=False)
         except ExportFile.DoesNotExist:
             export_identifier = self.create_export_obj(app_label)
-            generate_exports.delay(app_list, True, user_emails, export_identifier)
+            generate_exports.delay(app_list, True, False, user_emails, export_identifier)
             message = (
                 f'{app_label.replace("_", " ").capitalize()} export has been '
                 'initiated, an email will be sent once download completes.')
