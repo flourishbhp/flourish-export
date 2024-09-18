@@ -28,13 +28,19 @@ class HomeView(ExportMethodsViewMixin,
             self.generate_export(app_label='flourish_caregiver')
         elif download == '4':
             self.generate_export(app_label='flourish_child')
+        elif download == '5':
+            self.generate_export(app_label='flourish_prn')
 
         caregiver_crf_exports = ExportFile.objects.filter(
             description='Flourish Caregiver Export(s)').order_by('-uploaded_at')[:10]
 
         child_crf_exports = ExportFile.objects.filter(
             description='Flourish Child Export(s)').order_by('-uploaded_at')[:10]
+        
+        prn_exports = ExportFile.objects.filter(
+            description='Flourish PRN Export(s)').order_by('-uploaded_at')[:10]
         context.update(
             caregiver_crf_exports=caregiver_crf_exports,
-            child_crf_exports=child_crf_exports)
+            child_crf_exports=child_crf_exports,
+            prn_exports=prn_exports)
         return context
