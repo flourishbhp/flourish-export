@@ -68,7 +68,7 @@ def run_exports(model_cls, app_label, full_export=False):
                 print(f'Empty response returned for {model_cls._meta.verbose_name}')
 
 
-@shared_task(bind=True, soft_time_limit=7000, time_limit=7200)
+@shared_task(bind=True, soft_time_limit=21000, time_limit=21600)
 def generate_exports(self, app_list, create_zip=False, full_export=False, user_emails=[],
                      export_identifier=None):
 
