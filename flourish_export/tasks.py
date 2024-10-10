@@ -5,7 +5,7 @@ from django.apps import apps as django_apps
 from django.core.mail import send_mail
 from django.conf import settings
 from edc_base.utils import get_utcnow
-
+import logging
 from flourish_caregiver.admin_site import flourish_caregiver_admin
 from flourish_child.admin_site import flourish_child_admin
 from flourish_facet.admin_site import flourish_facet_admin
@@ -15,7 +15,7 @@ from .admin_export_helper import AdminExportHelper
 from .models import ExportFile
 
 admin_export_helper_cls = AdminExportHelper()
-
+logger = logging.getLogger('celery_progress')
 
 @shared_task
 def run_exports(model_cls, app_label, full_export=False):
@@ -56,12 +56,8 @@ def run_exports(model_cls, app_label, full_export=False):
 
             if response:
                 if response.status_code == 200:
-                    content_type = response._headers.get('content-type', ('', ''))[1]
-                    file_ext = 'csv' if content_type == admin_export_helper_cls.csv_content_type else 'xlsx'
-                    if not os.path.exists(file_path):
-                        os.makedirs(file_path)
-                    with open(f'{file_path}/{model_admin_cls.get_export_filename()}.{file_ext}', 'wb') as file:
-                        file.write(response.content)
+                    filename = f'{file_path}/{model_admin_cls.get_export_filename()}'
+                    save_csv_to_file(response,filename)
                 else:
                     response.raise_for_status()
             else:
@@ -69,21 +65,20 @@ def run_exports(model_cls, app_label, full_export=False):
 
 
 @shared_task(bind=True, soft_time_limit=21000, time_limit=21600)
-def generate_exports(self, app_list, create_zip=False, full_export=False, user_emails=[],
+def generate_exports(self, app_list, create_zip=False, full_export=False, flat_exports=None,user_emails=[],
                      export_identifier=None):
 
     app_labels = set()
 
     # Create a list to store the group of export tasks
     export_tasks = []
-
     try:
         for _, model_cls in app_list.items():
             app_label = model_cls.split('.')[0]
             app_labels.add(app_label)
-
-            # Call the export_data task asynchronously and store the task
-            export_tasks.append(run_exports.si(model_cls, app_label, full_export))
+            if not flat_exports:
+                # Call the export_data task asynchronously and store the task
+                export_tasks.append(run_exports.si(model_cls, app_label, full_export))
 
         # Group all export tasks together
         export_group = group(export_tasks)
@@ -91,11 +86,28 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, user_e
         # Change app_labels to list for serialization
         app_labels = list(app_labels) if not full_export else ['flourish', ]
         # Chain additional task for zipping and sending an email after exports are complete.
-        if create_zip:
-            chain(export_group,
-                  zip_and_send_email.si(app_labels, user_emails, export_identifier)).delay()
+
+        if flat_exports:
+            for app_label in app_labels:
+                export_chain = chain(
+                    export_group,
+                    generate_flat_exports.si(app_list,app_label,create_zip)
+                )
+                if create_zip:
+                    final_chain = chain(export_chain,
+                  zip_and_send_email.si(app_labels, user_emails, export_identifier,flat_exports))
+                else:
+                    final_chain = export_chain
+
+                final_chain.delay()
         else:
-            export_group.delay()
+            # Handle regular exports and their zipping/emailing
+            if create_zip:
+                final_chain = chain(export_group, zip_and_send_email.si(app_labels, user_emails, export_identifier))
+            else:
+                final_chain = export_group
+            
+            final_chain.delay()
     except SoftTimeLimitExceeded:
         self.update_state(state='FAILURE')
         new_soft_time_limit = self.request.soft_time_limit + 3600
@@ -104,13 +116,41 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, user_e
 
 
 @shared_task
-def zip_and_send_email(app_labels, user_emails, export_identifier):
+def generate_flat_exports(app_list,app_label ,create_zip=False):
+    file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
+    response = None
+
+    model_groups = {
+        "child": {name: model for name, model in app_list.items() if 'child' in name.lower() or 'infant' in name.lower()},
+        "caregiver": {name: model for name, model in app_list.items() if 'child' not in name.lower() and 'infant' not in name.lower()}
+    }
+
+    write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
+
+    for group, models in model_groups.items():
+        flat_participant_data= admin_export_helper_cls.get_flat_participant_data(models)
+        if flat_participant_data:
+            filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,group)}'
+            response = write_function(records=flat_participant_data,app_label=app_label,export_type=group)
+
+            if response and response.status_code == 200:
+                save_csv_to_file(response,filename)
+            else:
+                response.raise_for_status()
+        
+
+@shared_task
+def zip_and_send_email(app_labels, user_emails, export_identifier,flat_exports=None):
     for app_label in app_labels:
-        create_zip_and_email(app_label, export_identifier, user_emails)
+        create_zip_and_email(app_label, export_identifier, user_emails,flat_exports)
 
 
-def create_zip_and_email(app_label, export_identifier, user_emails):
-    zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
+def create_zip_and_email(app_label, export_identifier, user_emails,flat_exports=None):
+    if flat_exports:
+        zip_folder = f'admin_exports/{app_label}_flat_{get_utcnow().date()}'
+    else:
+        zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
+
     dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
     archive_name = f'{dir_to_zip}_{export_identifier}'
 
@@ -142,3 +182,13 @@ def create_zip_and_email(app_label, export_identifier, user_emails):
         pending_export.document = f'{zip_folder}_{export_identifier}.zip'
         pending_export.datetime_completed = get_utcnow()
         pending_export.save()
+
+
+def save_csv_to_file(response, filename):
+    """ Save response content to the specified file. """
+    content_type = response._headers.get('content-type', ('', ''))[1]
+    file_ext = 'csv' if content_type == admin_export_helper_cls.csv_content_type else 'xlsx'
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
+    with open(f'{filename}.{file_ext}', 'wb') as file:
+        file.write(response.content)
