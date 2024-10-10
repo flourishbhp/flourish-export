@@ -1,6 +1,6 @@
 import datetime
 import pandas as pd
-
+from django.db.models import ManyToManyField, ForeignKey, OneToOneField, ManyToOneRel, FileField, ImageField
 from django.apps import apps as django_apps
 from django.core.management.base import CommandError
 from django.db.models.fields.reverse_related import OneToOneRel
@@ -75,7 +75,7 @@ class AdminExportHelper:
                 data.update(inline_data)
         return data
 
-    def write_to_excel(self, records=[]):
+    def write_to_excel(self,app_label=None,records=[],export_type=None):
         excel_buffer = BytesIO()
         writer = pd.ExcelWriter(excel_buffer, engine='openpyxl')
 
@@ -94,22 +94,27 @@ class AdminExportHelper:
             workbook,
             content_type=self.excel_content_type
         )
-
-        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.xlsx'
+        if app_label and export_type:
+            response['Content-Disposition'] = f'attachment; filename={self.get_export_filename(app_label,export_type)}.xlsx'
+        else:
+            response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.xlsx'
         return response
 
     @property
     def excel_content_type(self):
         return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-    def write_to_csv(self, records=[]):
+    def write_to_csv(self, records=[],app_label=None,export_type=None):
         """ Write data to csv format and returns response
         """
         df = pd.DataFrame(records)
-
         response = HttpResponse(content_type=self.csv_content_type)
-        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.csv'
-        df.to_csv(path_or_buf=response, index=False)
+        if app_label and export_type:
+            response['Content-Disposition'] = f'attachment; filename={self.get_export_filename(app_label,export_type)}.csv'
+            df.to_csv(path_or_buf=response, index=False)
+        else:
+            response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.csv'
+            df.to_csv(path_or_buf=response, index=False)
         return response
 
     @property
@@ -135,9 +140,16 @@ class AdminExportHelper:
                 pass
         return data
 
-    def get_export_filename(self):
+    def get_export_filename(self, app_label=None,export_type=None):
         date_str = datetime.datetime.now().strftime('%Y-%m-%d')
-        filename = "%s-%s" % (self.model.__name__, date_str)
+        if hasattr(self, 'model') and self.model is not None:
+            filename = "%s-%s" % (self.model.__name__, date_str)
+        else:
+            # If self.model doesn't exist, use app_label and export_type
+            if app_label and export_type:
+                filename = "%s_%s_%s" % (app_label,export_type, date_str)
+            else:
+                raise ValueError("Either self.model must exist, or app_label and export_type must be provided.")
         return filename
 
     def get_app_list(self, app_label=None):
@@ -163,7 +175,8 @@ class AdminExportHelper:
         if issubclass(model_cls, ListModelMixin):
             exclude = True
         intermediate_model = model_cls._meta.verbose_name.endswith(
-            'relationship')
+            'relationship') or model_cls._meta.verbose_name.startswith(
+            'historical')
         if intermediate_model:
             exclude = True
         return exclude
@@ -171,3 +184,84 @@ class AdminExportHelper:
     def remove_exclude_models(self, app_list):
         app_list = {key: value._meta.label_lower for key, value in app_list.items() if not self.exclude_rel_models(value)}
         return app_list
+    
+
+    def process_object_fields(self, obj):
+        data = obj.__dict__.copy()
+        consent_cls = django_apps.get_model('flourish_facet.facetconsent')
+
+        visit_cls = django_apps.get_model('flourish_facet.facetvisit')
+
+        is_visit = isinstance(obj, visit_cls)
+        is_consent = isinstance(obj,consent_cls)
+
+        subject_identifier = getattr(obj, 'subject_identifier', None)
+
+        if getattr(obj, 'facet_visit', None):
+            data.update(subject_identifier=subject_identifier,
+                        visit_code=obj.visit_code)
+
+        for field in self.get_model_fields:
+            
+            field_name = field.name
+            if (field_name == 'consent_version') and is_visit:
+                data.update({f'{field_name}': '1'})
+                continue
+            if isinstance(field, (ForeignKey, OneToOneField, OneToOneRel)):
+                continue
+            if isinstance(field, (FileField, ImageField)):
+                file_obj = getattr(obj, field_name, '')
+                data.update({f'{field_name}': getattr(file_obj, 'name', '')})
+                continue
+            if isinstance(field, ManyToManyField):
+                data.update(self.m2m_data_dict(obj, field))
+                continue
+            if not (is_consent or is_visit) and isinstance(field, ManyToOneRel):
+                data.update(self.inline_data_dict(obj, field))
+                continue
+
+        # Exclude identifying values
+        data = self.remove_exclude_fields(data)
+        # Correct date formats
+        data = self.fix_date_formats(data)
+
+        return data
+    
+    def get_flat_model_data(self, model):
+        data = []
+        model_name = model.__name__.lower()
+        # Temporarily set self.model to the current model
+        self.model = model
+        try:
+            for obj in model.objects.all():
+                record = self.process_object_fields(obj)
+            
+                prefixed_record = {f"{model_name}_{key}": value for key, value in record.items()}
+                data.append(prefixed_record)
+        finally:
+            # Reset self.model after processing
+            self.model = None
+
+        return data
+    
+    def get_flat_participant_data(self, app_list):
+        """ 
+        Retrieve and flatten participant data across all models in app_list.
+        @param app_list: list of models to gather data from
+        @param export_type: 'child' or 'caregiver' to filter models accordingly
+        @return: List of dictionaries, each representing a participant's flat data across models
+        """
+        participant_data = {}
+
+        for _, model_cls in app_list.items():
+            model = django_apps.get_model(model_cls)
+            model_name = model.__name__.lower()
+            model_data = self.get_flat_model_data(model)
+            for record in model_data:
+                    subject_identifier = record.get(f'{model_name}_subject_identifier')  # Assuming subject_identifier exists
+                    if subject_identifier not in participant_data:
+                        participant_data[subject_identifier] = {}
+                    participant_data[subject_identifier].update(record)
+
+        flat_records = [data for data in participant_data.values()]
+        return flat_records
