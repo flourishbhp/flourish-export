@@ -1,4 +1,5 @@
-import shutil, os
+import shutil
+import os
 from celery import shared_task, group, chain
 from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as django_apps
@@ -17,6 +18,11 @@ from .models import ExportFile
 admin_export_helper_cls = AdminExportHelper()
 logger = logging.getLogger('celery_progress')
 
+admin_site_map = {'flourish_child': flourish_child_admin,
+                  'flourish_caregiver': flourish_caregiver_admin,
+                  'flourish_prn': flourish_prn_admin,
+                  'flourish_facet': flourish_facet_admin}
+
 @shared_task
 def run_exports(model_cls, app_label, full_export=False):
     """ Executes the csv model export method from admin export action(s) and writes response
@@ -24,10 +30,6 @@ def run_exports(model_cls, app_label, full_export=False):
         @param model_cls: Specific model class definition
         @param app_label: Specific app label for the model class
     """
-    admin_site_map = {'flourish_child': flourish_child_admin,
-                      'flourish_caregiver': flourish_caregiver_admin,
-                      'flourish_prn': flourish_prn_admin,
-                      'flourish_facet': flourish_facet_admin}
 
     model_cls = django_apps.get_model(model_cls)
     app_admin_site = admin_site_map.get(app_label, None)
@@ -57,7 +59,7 @@ def run_exports(model_cls, app_label, full_export=False):
             if response:
                 if response.status_code == 200:
                     filename = f'{file_path}/{model_admin_cls.get_export_filename()}'
-                    save_csv_to_file(response,filename)
+                    save_csv_to_file(response, filename)
                 else:
                     response.raise_for_status()
             else:
@@ -65,7 +67,7 @@ def run_exports(model_cls, app_label, full_export=False):
 
 
 @shared_task(bind=True, soft_time_limit=21000, time_limit=21600)
-def generate_exports(self, app_list, create_zip=False, full_export=False, flat_exports=None,user_emails=[],
+def generate_exports(self, app_list, create_zip=False, full_export=False, flat_exports=None, user_emails=[],
                      export_identifier=None):
 
     app_labels = set()
@@ -91,11 +93,11 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, flat_e
             for app_label in app_labels:
                 export_chain = chain(
                     export_group,
-                    generate_flat_exports.si(app_list,app_label,create_zip)
+                    generate_flat_exports.si(app_list, app_label, create_zip)
                 )
                 if create_zip:
                     final_chain = chain(export_chain,
-                  zip_and_send_email.si(app_labels, user_emails, export_identifier,flat_exports))
+                                        zip_and_send_email.si(app_labels, user_emails, export_identifier, flat_exports))
                 else:
                     final_chain = export_chain
 
@@ -103,23 +105,25 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, flat_e
         else:
             # Handle regular exports and their zipping/emailing
             if create_zip:
-                final_chain = chain(export_group, zip_and_send_email.si(app_labels, user_emails, export_identifier))
+                final_chain = chain(export_group, zip_and_send_email.si(
+                    app_labels, user_emails, export_identifier))
             else:
                 final_chain = export_group
-            
+
             final_chain.delay()
     except SoftTimeLimitExceeded:
         self.update_state(state='FAILURE')
         new_soft_time_limit = self.request.soft_time_limit + 3600
         new_time_limit = self.request.time_limit + 3600
-        self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
+        self.retry(countdown=10, max_retries=3,
+                   soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
 
 
 @shared_task
-def generate_flat_exports(app_list,app_label ,create_zip=False):
+def generate_flat_exports(app_list, app_label, create_zip=False):
     file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
     response = None
-
+    suffix_list = ['_subject_identifier', '_hiv_status', '_study_status']
     model_groups = {
         "child": {name: model for name, model in app_list.items() if 'child' in name.lower() or 'infant' in name.lower()},
         "caregiver": {name: model for name, model in app_list.items() if 'child' not in name.lower() and 'infant' not in name.lower()}
@@ -128,24 +132,43 @@ def generate_flat_exports(app_list,app_label ,create_zip=False):
     write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
 
     for group, models in model_groups.items():
-        flat_participant_data= admin_export_helper_cls.get_flat_participant_data(models)
+        participant_data = {}
+        for _, model_cls in models.items():
+            model = django_apps.get_model(model_cls)
+            app_admin_site = admin_site_map.get(app_label, None)
+            model_admin_cls = app_admin_site._registry.get(model, None)
+            model_name = model.__name__.lower()
+            if not hasattr(model_admin_cls, 'get_flat_model_data'):
+                continue
+            model_data = model_admin_cls.get_flat_model_data(model)
+
+            for record in model_data:
+                subject_identifier = record.get(f'{model_name}_subject_identifier')
+                if subject_identifier not in participant_data:
+                    participant_data[subject_identifier] = {}
+                participant_data[subject_identifier].update(record)
+
+        flat_participant_data = [data for data in participant_data.values()]
+
         if flat_participant_data:
+            flat_participant_data = remove_duplicate_fields(flat_participant_data, suffix_list)
             filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,group)}'
-            response = write_function(records=flat_participant_data,app_label=app_label,export_type=group)
+            response = write_function(records=flat_participant_data,
+                                      app_label=app_label, export_type=group)
 
             if response and response.status_code == 200:
-                save_csv_to_file(response,filename)
+                save_csv_to_file(response, filename)
             else:
                 response.raise_for_status()
-        
+
 
 @shared_task
-def zip_and_send_email(app_labels, user_emails, export_identifier,flat_exports=None):
+def zip_and_send_email(app_labels, user_emails, export_identifier, flat_exports=None):
     for app_label in app_labels:
-        create_zip_and_email(app_label, export_identifier, user_emails,flat_exports)
+        create_zip_and_email(app_label, export_identifier, user_emails, flat_exports)
 
 
-def create_zip_and_email(app_label, export_identifier, user_emails,flat_exports=None):
+def create_zip_and_email(app_label, export_identifier, user_emails, flat_exports=None):
     if flat_exports:
         zip_folder = f'admin_exports/{app_label}_flat_{get_utcnow().date()}'
     else:
@@ -192,3 +215,29 @@ def save_csv_to_file(response, filename):
         os.makedirs(os.path.dirname(filename))
     with open(f'{filename}.{file_ext}', 'wb') as file:
         file.write(response.content)
+
+def remove_duplicate_fields(records, suffix_list):
+    # Loop over each record in flat_participant_data
+    for record in records:
+        # Create a set to track encountered suffixes
+        encountered_suffixes = set()
+
+        # Create a list of keys to remove to avoid modifying the dictionary while iterating
+        keys_to_remove = []
+
+        for key in list(record.keys()):
+            # Check if the key ends with any suffix in suffix_list
+            for suffix in suffix_list:
+                if key.endswith(suffix):
+                    # If suffix has already been encountered, mark the key for removal
+                    if suffix in encountered_suffixes:
+                        keys_to_remove.append(key)
+                    else:
+                        # Add suffix to encountered set for the first time
+                        encountered_suffixes.add(suffix)
+
+        # Remove duplicate keys
+        for key in keys_to_remove:
+            del record[key]
+
+    return records

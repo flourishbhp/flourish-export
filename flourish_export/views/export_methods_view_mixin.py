@@ -24,14 +24,14 @@ class ExportMethodsViewMixin:
         description = None
         if flat_exports:
             description = 'Flourish Facet Flat Export(s)'
-        
 
         try:
             ExportFile.objects.get(study=app_label,
-                                   download_complete=False,description=description)
+                                   download_complete=False, description=description)
         except ExportFile.DoesNotExist:
             export_identifier = self.create_export_obj(app_label, description)
-            generate_exports.delay(app_list, True, False, flat_exports,user_emails, export_identifier)
+            generate_exports.delay(app_list, True, False, flat_exports,
+                                   user_emails, export_identifier)
             message = (
                 f'{app_label.replace("_", " ").capitalize()} export has been '
                 'initiated, an email will be sent once download completes.')

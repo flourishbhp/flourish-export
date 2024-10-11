@@ -36,7 +36,7 @@ class HomeView(ExportMethodsViewMixin,
 
         child_crf_exports = ExportFile.objects.filter(
             description='Flourish Child Export(s)').order_by('-uploaded_at')[:10]
-        
+
         prn_exports = ExportFile.objects.filter(
             description='Flourish PRN Export(s)').order_by('-uploaded_at')[:10]
         context.update(
