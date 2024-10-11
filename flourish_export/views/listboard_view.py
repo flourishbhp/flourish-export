@@ -91,7 +91,7 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ExportMethodsViewMixin,
     def get_queryset_filter_options(self, request, *args, **kwargs):
         options = super().get_queryset_filter_options(request, *args, **kwargs)
         options = self.add_description_filter_options(
-                options=options, **kwargs)
+            options=options, **kwargs)
         if kwargs.get('export_identifier'):
             options.update(
                 {'export_identifier': kwargs.get('export_identifier')})

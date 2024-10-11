@@ -23,13 +23,13 @@ from ..models import ExportFile
 class ListBoardViewMixin:
 
     def export_caregiver_data(self, export_path=None):
-            """Export all caregiver CRF data.
-            """
-            export_crf_data = ExportDataMixin(export_path=export_path)
-            export_crf_data.export_crfs(
-                crf_list=caregiver_crfs_list,
-                crf_data_dict=ExportMethods().caregiver_crf_data_dict,
-                study='flourish_caregiver')
+        """Export all caregiver CRF data.
+        """
+        export_crf_data = ExportDataMixin(export_path=export_path)
+        export_crf_data.export_crfs(
+            crf_list=caregiver_crfs_list,
+            crf_data_dict=ExportMethods().caregiver_crf_data_dict,
+            study='flourish_caregiver')
 
     def export_child_data(self, export_path=None):
         """Export child data.
@@ -54,7 +54,7 @@ class ListBoardViewMixin:
         non_crf_data.follow_models(
             follow_model_list=follow_model_list,
             study='flourish_follow')
- 
+
         non_crf_data.child_visit()
         non_crf_data.caregiver_visit()
 
@@ -90,8 +90,10 @@ class ListBoardViewMixin:
             start = time.perf_counter()
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
-            zipped_file_path = 'documents/' + export_identifier + '_flourish_all_export_' + today_date + '.zip'
-            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + export_identifier + '_flourish_all_export_' + today_date
+            zipped_file_path = 'documents/' + export_identifier + \
+                '_flourish_all_export_' + today_date + '.zip'
+            dir_to_zip = settings.MEDIA_ROOT + '/documents/' + \
+                export_identifier + '_flourish_all_export_' + today_date
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
@@ -105,8 +107,8 @@ class ListBoardViewMixin:
             # child_export_path = dir_to_zip + '/child/'
             #
             # self.export_requisitions(
-                # caregiver_export_path=caregiver_export_path,
-                # child_export_path=child_export_path)
+            # caregiver_export_path=caregiver_export_path,
+            # child_export_path=child_export_path)
 
             doc.document = zipped_file_path
             doc.save()
@@ -147,7 +149,8 @@ class ListBoardViewMixin:
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
             zipped_file_path = f'documents/{export_identifier}_flourish_child_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_child_export_{today_date}'
+            dir_to_zip = settings.MEDIA_ROOT + \
+                f'/documents/{export_identifier}_flourish_child_export_{today_date}'
 
             export_path = dir_to_zip + '/child/'
             self.export_child_data(export_path=export_path)
@@ -191,7 +194,8 @@ class ListBoardViewMixin:
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
             zipped_file_path = f'documents/{export_identifier}_flourish_caregiver_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_caregiver_export_{today_date}'
+            dir_to_zip = settings.MEDIA_ROOT + \
+                f'/documents/{export_identifier}_flourish_caregiver_export_{today_date}'
 
             export_path = dir_to_zip + '/caregiver/'
             self.export_caregiver_data(export_path=export_path)
@@ -235,7 +239,8 @@ class ListBoardViewMixin:
             today_date = datetime.datetime.now().strftime('%Y%m%d')
 
             zipped_file_path = f'documents/{export_identifier}_flourish_non_crf_export_{today_date}.zip'
-            dir_to_zip = settings.MEDIA_ROOT + f'/documents/{export_identifier}_flourish_non_crf_export_{today_date}'
+            dir_to_zip = settings.MEDIA_ROOT + \
+                f'/documents/{export_identifier}_flourish_non_crf_export_{today_date}'
 
             export_path = dir_to_zip + '/non_crf/'
             self.export_non_crf_data(export_path=export_path)
@@ -281,8 +286,8 @@ class ListBoardViewMixin:
 
             # Notify user the download is done
             subject = export_identifier + ' ' + doc.description
-            message = (export_identifier + doc.description +
-                       ' export files have been successfully generated and '
+            message = (export_identifier + doc.description
+                       + ' export files have been successfully generated and '
                        'ready for download. This is an automated message.')
             send_mail(
                 subject=subject,
@@ -313,4 +318,3 @@ class ListBoardViewMixin:
             if doc.created.date() < get_utcnow().date():
                 doc.delete()
         return True
-

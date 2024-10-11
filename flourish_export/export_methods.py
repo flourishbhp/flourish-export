@@ -134,7 +134,8 @@ class ExportMethods:
             )
         )
         try:
-            rs = self.rs_cls.objects.get(subject_identifier=crf_obj.maternal_visit.subject_identifier)
+            rs = self.rs_cls.objects.get(
+                subject_identifier=crf_obj.maternal_visit.subject_identifier)
         except self.rs_cls.DoesNotExist:
             raise ValidationError('RegisteredSubject can not be missing')
         else:
@@ -181,7 +182,8 @@ class ExportMethods:
                 inline_values = key_manager.all()
                 for count, obj in enumerate(inline_values):
                     inline_data = obj.__dict__
-                    inline_data = {f'{key}__{count}': value for key, value in inline_data.items() if key not in exclude_inline_fields}
+                    inline_data = {f'{key}__{count}': value for key,
+                                   value in inline_data.items() if key not in exclude_inline_fields}
                     inline_data.update(self.m2m_data_dict(obj, str(count)))
                     data.update(inline_data)
         return data
@@ -210,7 +212,8 @@ class ExportMethods:
         )
 
         try:
-            rs = self.rs_cls.objects.get(subject_identifier=crf_obj.child_visit.subject_identifier)
+            rs = self.rs_cls.objects.get(
+                subject_identifier=crf_obj.child_visit.subject_identifier)
         except self.rs_cls.DoesNotExist:
 
             raise ValidationError('RegisteredSubject can not be missing')
