@@ -90,18 +90,15 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, flat_e
         # Chain additional task for zipping and sending an email after exports are complete.
 
         if flat_exports:
-            for app_label in app_labels:
-                export_chain = chain(
-                    export_group,
-                    generate_flat_exports.si(app_list, app_label, create_zip)
-                )
-                if create_zip:
-                    final_chain = chain(export_chain,
-                                        zip_and_send_email.si(app_labels, user_emails, export_identifier, flat_exports))
-                else:
-                    final_chain = export_chain
+            export_tasks.append(generate_flat_exports.si(app_list, app_labels, create_zip))
+            export_chain = group(export_tasks)
+            if create_zip:
+                final_chain = chain(export_chain,
+                                    zip_and_send_email.si(app_labels, user_emails, export_identifier, flat_exports))
+            else:
+                final_chain = export_chain
 
-                final_chain.delay()
+            final_chain.delay()
         else:
             # Handle regular exports and their zipping/emailing
             if create_zip:
@@ -120,46 +117,53 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, flat_e
 
 
 @shared_task
-def generate_flat_exports(app_list, app_label, create_zip=False):
-    file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
-    response = None
-    suffix_list = ['_subject_identifier', '_hiv_status', '_study_status']
-    model_groups = {
-        "child": {name: model for name, model in app_list.items() if 'child' in name.lower() or 'infant' in name.lower()},
-        "caregiver": {name: model for name, model in app_list.items() if 'child' not in name.lower() and 'infant' not in name.lower()}
-    }
+def generate_flat_exports(app_list, app_labels, create_zip=False):
+    for app_label in app_labels:
+        file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
+        response = None
+        suffix_list = ['_subject_identifier', '_hiv_status', '_study_status']
+        model_groups = {
+            "child": {},
+            "caregiver": {}
+        }
 
-    write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
-
-    for group, models in model_groups.items():
-        participant_data = {}
-        for _, model_cls in models.items():
-            model = django_apps.get_model(model_cls)
-            app_admin_site = admin_site_map.get(app_label, None)
-            model_admin_cls = app_admin_site._registry.get(model, None)
-            model_name = model.__name__.lower()
-            if not hasattr(model_admin_cls, 'get_flat_model_data'):
-                continue
-            model_data = model_admin_cls.get_flat_model_data(model)
-
-            for record in model_data:
-                subject_identifier = record.get(f'{model_name}_subject_identifier')
-                if subject_identifier not in participant_data:
-                    participant_data[subject_identifier] = {}
-                participant_data[subject_identifier].update(record)
-
-        flat_participant_data = [data for data in participant_data.values()]
-
-        if flat_participant_data:
-            flat_participant_data = remove_duplicate_fields(flat_participant_data, suffix_list)
-            filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,group)}'
-            response = write_function(records=flat_participant_data,
-                                      app_label=app_label, export_type=group)
-
-            if response and response.status_code == 200:
-                save_csv_to_file(response, filename)
+        for name, model in app_list.items():
+            if 'child' in name.lower() or 'infant' in name.lower():
+                model_groups["child"][name] = model
             else:
-                response.raise_for_status()
+                model_groups["caregiver"][name] = model
+
+        write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
+
+        for name, models in model_groups.items():
+            participant_data = {}
+            for _, model_cls in models.items():
+                model = django_apps.get_model(model_cls)
+                app_admin_site = admin_site_map.get(app_label, None)
+                model_admin_cls = app_admin_site._registry.get(model, None)
+                model_name = model.__name__.lower()
+                if not hasattr(model_admin_cls, 'get_flat_model_data'):
+                    continue
+                model_data = model_admin_cls.get_flat_model_data(model)
+
+                for record in model_data:
+                    subject_identifier = record.get(f'{model_name}_subject_identifier')
+                    if subject_identifier not in participant_data:
+                        participant_data[subject_identifier] = {}
+                    participant_data[subject_identifier].update(record)
+
+            flat_participant_data = [data for data in participant_data.values()]
+
+            if flat_participant_data:
+                flat_participant_data = remove_duplicate_fields(flat_participant_data, suffix_list)
+                filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,name)}'
+                response = write_function(records=flat_participant_data,
+                                            app_label=app_label, export_type=name)
+
+                if response and response.status_code == 200:
+                    save_csv_to_file(response, filename)
+                else:
+                    response.raise_for_status()
 
 
 @shared_task
