@@ -124,38 +124,38 @@ def generate_flat_exports(app_list, app_labels, create_zip=False):
             "caregiver": {}
         }
 
-        for name, model in app_list.items():
+        for name, model_cls in app_list.items():
+            partipant_type = None
             if 'child' in name.lower() or 'infant' in name.lower():
-                model_groups["child"][name] = model
+                partipant_type = 'child'
             else:
-                model_groups["caregiver"][name] = model
+                partipant_type = 'caregiver'
+
+            model = django_apps.get_model(model_cls)
+            app_admin_site = admin_site_map.get(app_label, None)
+            model_admin_cls = app_admin_site._registry.get(model, None)
+            model_name = model.__name__.lower()
+            if not hasattr(model_admin_cls, 'get_flat_model_data'):
+                continue
+            model_data = model_admin_cls.get_flat_model_data(model)
+
+            for record in model_data:
+                subject_identifier = record.get(f'{model_name}_subject_identifier')
+                if subject_identifier not in model_groups[partipant_type]:
+                    model_groups[partipant_type][subject_identifier] = {}
+                model_groups[partipant_type][subject_identifier].update(record)
+
 
         write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
 
-        for name, models in model_groups.items():
-            participant_data = {}
-            for _, model_cls in models.items():
-                model = django_apps.get_model(model_cls)
-                app_admin_site = admin_site_map.get(app_label, None)
-                model_admin_cls = app_admin_site._registry.get(model, None)
-                model_name = model.__name__.lower()
-                if not hasattr(model_admin_cls, 'get_flat_model_data'):
-                    continue
-                model_data = model_admin_cls.get_flat_model_data(model)
-
-                for record in model_data:
-                    subject_identifier = record.get(f'{model_name}_subject_identifier')
-                    if subject_identifier not in participant_data:
-                        participant_data[subject_identifier] = {}
-                    participant_data[subject_identifier].update(record)
-
-            flat_participant_data = [data for data in participant_data.values()]
+        for export_type, participant_data in model_groups.items():     
+            flat_participant_data = participant_data.values()
 
             if flat_participant_data:
                 flat_participant_data = remove_duplicate_fields(flat_participant_data, suffix_list)
-                filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,name)}'
+                filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,export_type)}'
                 response = write_function(records=flat_participant_data,
-                                            app_label=app_label, export_type=name)
+                                            app_label=app_label, export_type=export_type)
 
                 if response and response.status_code == 200:
                     save_csv_to_file(response, filename)
