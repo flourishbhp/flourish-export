@@ -94,8 +94,7 @@ class AdminExportHelper:
             workbook,
             content_type=self.excel_content_type
         )
-        filename = self.get_export_filename(
-            app_label, export_type) if app_label and export_type else self.get_export_filename()
+        filename = self.get_export_filename(app_label, export_type)
         response['Content-Disposition'] = f'attachment; filename={filename}.xlsx'
         return response
 
@@ -110,8 +109,7 @@ class AdminExportHelper:
         response = HttpResponse(content_type=self.csv_content_type)
 
         # Determine the filename based on app_label and export_type
-        filename = self.get_export_filename(
-            app_label, export_type) if app_label and export_type else self.get_export_filename()
+        filename = self.get_export_filename(app_label, export_type)
         # Set the response header for CSV download
         response['Content-Disposition'] = f'attachment; filename={filename}.csv'
         df.to_csv(path_or_buf=response, index=False)
