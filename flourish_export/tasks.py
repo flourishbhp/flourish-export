@@ -90,14 +90,11 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, flat_e
         # Chain additional task for zipping and sending an email after exports are complete.
 
         if flat_exports:
-            export_tasks.append(generate_flat_exports.si(app_list, app_labels, create_zip))
-            export_chain = group(export_tasks)
             if create_zip:
-                final_chain = chain(export_chain,
+                final_chain = chain(generate_flat_exports.si(app_list, app_labels, create_zip),
                                     zip_and_send_email.si(app_labels, user_emails, export_identifier, flat_exports))
             else:
-                final_chain = export_chain
-
+                final_chain = generate_flat_exports(app_list, app_labels, create_zip)
             final_chain.delay()
         else:
             # Handle regular exports and their zipping/emailing
