@@ -80,7 +80,10 @@ class AdminExportHelper:
         writer = pd.ExcelWriter(excel_buffer, engine='openpyxl')
 
         df = pd.DataFrame(records)
-        df.to_excel(writer, sheet_name=f'{self.model.__name__}', index=False)
+        sheet_name = f'{export_type}' if export_type else f'{self.model.__name__}'
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        
+
 
         # Save and close the workbook
         writer.close()
