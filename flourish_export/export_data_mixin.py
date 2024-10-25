@@ -11,7 +11,8 @@ from .export_model_lists import exclude_fields
 class ExportDataMixin:
 
     def __init__(self, export_path=None):
-        self.export_path = export_path or django_apps.get_app_config('flourish_export').caregiver_path
+        self.export_path = export_path or django_apps.get_app_config(
+            'flourish_export').caregiver_path
         if not os.path.exists(self.export_path):
             os.makedirs(self.export_path)
         self.export_methods_cls = ExportMethods()
@@ -138,7 +139,8 @@ class ExportDataMixin:
                             crfdata = crf_data_dict(crf_obj)
 
                             # Merged inline and CRF data
-                            data = self.export_methods_cls.fix_date_format({**crfdata, **in_data})
+                            data = self.export_methods_cls.fix_date_format(
+                                {**crfdata, **in_data})
                             for e_fields in exclude_fields:
                                 try:
                                     del data[e_fields]
