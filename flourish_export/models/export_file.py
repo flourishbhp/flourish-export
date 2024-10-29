@@ -65,7 +65,7 @@ class ExportFile(SiteModelMixin, SearchSlugModelMixin, BaseUuidModel):
     def save(self, *args, **kwargs):
         if self.datetime_started and self.datetime_completed:
             difference = self.datetime_completed - self.datetime_started
-            self.download_time = round(difference.total_seconds() / 60, 2)     
+            self.download_time = round(difference.total_seconds() / 60, 2)
         super().save(*args, **kwargs)
 
     def __str__(self):

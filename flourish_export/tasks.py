@@ -1,11 +1,12 @@
-import shutil, os
+import shutil
+import os
 from celery import shared_task, group, chain
 from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as django_apps
 from django.core.mail import send_mail
 from django.conf import settings
 from edc_base.utils import get_utcnow
-
+import logging
 from flourish_caregiver.admin_site import flourish_caregiver_admin
 from flourish_child.admin_site import flourish_child_admin
 from flourish_facet.admin_site import flourish_facet_admin
@@ -15,7 +16,12 @@ from .admin_export_helper import AdminExportHelper
 from .models import ExportFile
 
 admin_export_helper_cls = AdminExportHelper()
+logger = logging.getLogger('celery_progress')
 
+admin_site_map = {'flourish_child': flourish_child_admin,
+                  'flourish_caregiver': flourish_caregiver_admin,
+                  'flourish_prn': flourish_prn_admin,
+                  'flourish_facet': flourish_facet_admin}
 
 @shared_task
 def run_exports(model_cls, app_label, full_export=False):
@@ -24,10 +30,6 @@ def run_exports(model_cls, app_label, full_export=False):
         @param model_cls: Specific model class definition
         @param app_label: Specific app label for the model class
     """
-    admin_site_map = {'flourish_child': flourish_child_admin,
-                      'flourish_caregiver': flourish_caregiver_admin,
-                      'flourish_prn': flourish_prn_admin,
-                      'flourish_facet': flourish_facet_admin}
 
     model_cls = django_apps.get_model(model_cls)
     app_admin_site = admin_site_map.get(app_label, None)
@@ -56,12 +58,8 @@ def run_exports(model_cls, app_label, full_export=False):
 
             if response:
                 if response.status_code == 200:
-                    content_type = response._headers.get('content-type', ('', ''))[1]
-                    file_ext = 'csv' if content_type == admin_export_helper_cls.csv_content_type else 'xlsx'
-                    if not os.path.exists(file_path):
-                        os.makedirs(file_path)
-                    with open(f'{file_path}/{model_admin_cls.get_export_filename()}.{file_ext}', 'wb') as file:
-                        file.write(response.content)
+                    filename = f'{file_path}/{model_admin_cls.get_export_filename()}'
+                    save_csv_to_file(response, filename)
                 else:
                     response.raise_for_status()
             else:
@@ -69,21 +67,20 @@ def run_exports(model_cls, app_label, full_export=False):
 
 
 @shared_task(bind=True, soft_time_limit=21000, time_limit=21600)
-def generate_exports(self, app_list, create_zip=False, full_export=False, user_emails=[],
+def generate_exports(self, app_list, create_zip=False, full_export=False, flat_exports=None, user_emails=[],
                      export_identifier=None):
 
     app_labels = set()
 
     # Create a list to store the group of export tasks
     export_tasks = []
-
     try:
         for _, model_cls in app_list.items():
             app_label = model_cls.split('.')[0]
             app_labels.add(app_label)
-
-            # Call the export_data task asynchronously and store the task
-            export_tasks.append(run_exports.si(model_cls, app_label, full_export))
+            if not flat_exports:
+                # Call the export_data task asynchronously and store the task
+                export_tasks.append(run_exports.si(model_cls, app_label, full_export))
 
         # Group all export tasks together
         export_group = group(export_tasks)
@@ -91,26 +88,93 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, user_e
         # Change app_labels to list for serialization
         app_labels = list(app_labels) if not full_export else ['flourish', ]
         # Chain additional task for zipping and sending an email after exports are complete.
-        if create_zip:
-            chain(export_group,
-                  zip_and_send_email.si(app_labels, user_emails, export_identifier)).delay()
+
+        if flat_exports:
+            if create_zip:
+                final_chain = chain(generate_flat_exports.si(app_list, app_labels, create_zip),
+                                    zip_and_send_email.si(app_labels, user_emails, export_identifier, flat_exports))
+            else:
+                final_chain = generate_flat_exports(app_list, app_labels, create_zip)
+            final_chain.delay()
         else:
-            export_group.delay()
+            # Handle regular exports and their zipping/emailing
+            if create_zip:
+                final_chain = chain(export_group, zip_and_send_email.si(
+                    app_labels, user_emails, export_identifier))
+            else:
+                final_chain = export_group
+
+            final_chain.delay()
     except SoftTimeLimitExceeded:
         self.update_state(state='FAILURE')
         new_soft_time_limit = self.request.soft_time_limit + 3600
         new_time_limit = self.request.time_limit + 3600
-        self.retry(countdown=10, max_retries=3, soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
+        self.retry(countdown=10, max_retries=3,
+                   soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
 
 
 @shared_task
-def zip_and_send_email(app_labels, user_emails, export_identifier):
+def generate_flat_exports(app_list, app_labels, create_zip=False):
     for app_label in app_labels:
-        create_zip_and_email(app_label, export_identifier, user_emails)
+        file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
+        response = None
+        suffix_list = ['_subject_identifier', '_hiv_status', '_study_status']
+        model_groups = {
+            "child": {},
+            "caregiver": {}
+        }
+
+        for name, model_cls in app_list.items():
+            partipant_type = None
+            if 'child' in name.lower() or 'infant' in name.lower():
+                partipant_type = 'child'
+            else:
+                partipant_type = 'caregiver'
+
+            model = django_apps.get_model(model_cls)
+            app_admin_site = admin_site_map.get(app_label, None)
+            model_admin_cls = app_admin_site._registry.get(model, None)
+            model_name = model.__name__.lower()
+            if not hasattr(model_admin_cls, 'get_flat_model_data'):
+                continue
+            model_data = model_admin_cls.get_flat_model_data(model)
+
+            for record in model_data:
+                subject_identifier = record.get(f'{model_name}_subject_identifier')
+                if subject_identifier not in model_groups[partipant_type]:
+                    model_groups[partipant_type][subject_identifier] = {}
+                model_groups[partipant_type][subject_identifier].update(record)
 
 
-def create_zip_and_email(app_label, export_identifier, user_emails):
-    zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
+        write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
+
+        for export_type, participant_data in model_groups.items():     
+            flat_participant_data = participant_data.values()
+
+            if flat_participant_data:
+                flat_participant_data = remove_duplicate_fields(flat_participant_data, suffix_list)
+                filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,export_type)}'
+                response = write_function(records=flat_participant_data,
+                                            app_label=app_label, export_type=export_type)
+
+                if response and response.status_code == 200:
+                    save_csv_to_file(response, filename)
+                else:
+                    response.raise_for_status()
+
+
+@shared_task
+def zip_and_send_email(app_labels, user_emails, export_identifier, flat_exports=None):
+    for app_label in app_labels:
+        create_zip_and_email(app_label, export_identifier, user_emails, flat_exports)
+
+
+def create_zip_and_email(app_label, export_identifier, user_emails, flat_exports=None):
+    if flat_exports:
+        zip_folder = f'admin_exports/{app_label}_flat_{get_utcnow().date()}'
+    else:
+        zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
+
     dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
     archive_name = f'{dir_to_zip}_{export_identifier}'
 
@@ -142,3 +206,39 @@ def create_zip_and_email(app_label, export_identifier, user_emails):
         pending_export.document = f'{zip_folder}_{export_identifier}.zip'
         pending_export.datetime_completed = get_utcnow()
         pending_export.save()
+
+
+def save_csv_to_file(response, filename):
+    """ Save response content to the specified file. """
+    content_type = response._headers.get('content-type', ('', ''))[1]
+    file_ext = 'csv' if content_type == admin_export_helper_cls.csv_content_type else 'xlsx'
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
+    with open(f'{filename}.{file_ext}', 'wb') as file:
+        file.write(response.content)
+
+def remove_duplicate_fields(records, suffix_list):
+    # Loop over each record in flat_participant_data
+    for record in records:
+        # Create a set to track encountered suffixes
+        encountered_suffixes = set()
+
+        # Create a list of keys to remove to avoid modifying the dictionary while iterating
+        keys_to_remove = []
+
+        for key in list(record.keys()):
+            # Check if the key ends with any suffix in suffix_list
+            for suffix in suffix_list:
+                if key.endswith(suffix):
+                    # If suffix has already been encountered, mark the key for removal
+                    if suffix in encountered_suffixes:
+                        keys_to_remove.append(key)
+                    else:
+                        # Add suffix to encountered set for the first time
+                        encountered_suffixes.add(suffix)
+
+        # Remove duplicate keys
+        for key in keys_to_remove:
+            del record[key]
+
+    return records

@@ -17,17 +17,18 @@ class ExportMethodsViewMixin:
         ExportFile.objects.create(**model_options)
         return export_identifier
 
-    def generate_export(self, app_label, user_emails=[]):
+    def generate_export(self, app_label, user_emails=[], flat_exports=False,description=None):
         app_list = self.admin_helper_cls().get_app_list(app_label)
         app_list = self.admin_helper_cls().remove_exclude_models(app_list)
         user_emails = user_emails or [self.request.user.email]
 
         try:
             ExportFile.objects.get(study=app_label,
-                                   download_complete=False)
+                                   download_complete=False, description=description)
         except ExportFile.DoesNotExist:
-            export_identifier = self.create_export_obj(app_label)
-            generate_exports.delay(app_list, True, False, user_emails, export_identifier)
+            export_identifier = self.create_export_obj(app_label, description)
+            generate_exports.delay(app_list, True, False, flat_exports,
+                                   user_emails, export_identifier)
             message = (
                 f'{app_label.replace("_", " ").capitalize()} export has been '
                 'initiated, an email will be sent once download completes.')
