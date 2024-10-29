@@ -1,6 +1,5 @@
 import datetime
 import pandas as pd
-
 from django.apps import apps as django_apps
 from django.core.management.base import CommandError
 from django.db.models.fields.reverse_related import OneToOneRel
@@ -68,19 +67,23 @@ class AdminExportHelper:
             inline_values = key_manager.all()
             for _count, obj in enumerate(inline_values):
                 inline_data = obj.__dict__
-                inline_data = {f'{key}__{_count}': value for key, value in inline_data.items() if key not in exclude_fields}
+                inline_data = {f'{key}__{_count}': value for key,
+                               value in inline_data.items() if key not in exclude_fields}
                 m2m_fields = obj._meta.many_to_many
                 for field in m2m_fields:
                     inline_data.update(self.m2m_data_dict(obj, field, str(_count)))
                 data.update(inline_data)
         return data
 
-    def write_to_excel(self, records=[]):
+    def write_to_excel(self, app_label=None, records=[], export_type=None):
         excel_buffer = BytesIO()
         writer = pd.ExcelWriter(excel_buffer, engine='openpyxl')
 
         df = pd.DataFrame(records)
-        df.to_excel(writer, sheet_name=f'{self.model.__name__}', index=False)
+        sheet_name = f'{export_type}' if export_type else f'{self.model.__name__}'
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        
+
 
         # Save and close the workbook
         writer.close()
@@ -94,22 +97,26 @@ class AdminExportHelper:
             workbook,
             content_type=self.excel_content_type
         )
-
-        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.xlsx'
+        filename = self.get_export_filename(app_label, export_type)
+        response['Content-Disposition'] = f'attachment; filename={filename}.xlsx'
         return response
 
     @property
     def excel_content_type(self):
         return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-    def write_to_csv(self, records=[]):
+    def write_to_csv(self, records=[], app_label=None, export_type=None):
         """ Write data to csv format and returns response
         """
         df = pd.DataFrame(records)
-
         response = HttpResponse(content_type=self.csv_content_type)
-        response['Content-Disposition'] = f'attachment; filename={self.get_export_filename()}.csv'
+
+        # Determine the filename based on app_label and export_type
+        filename = self.get_export_filename(app_label, export_type)
+        # Set the response header for CSV download
+        response['Content-Disposition'] = f'attachment; filename={filename}.csv'
         df.to_csv(path_or_buf=response, index=False)
+
         return response
 
     @property
@@ -135,9 +142,17 @@ class AdminExportHelper:
                 pass
         return data
 
-    def get_export_filename(self):
+    def get_export_filename(self, app_label=None, export_type=None):
         date_str = datetime.datetime.now().strftime('%Y-%m-%d')
-        filename = "%s-%s" % (self.model.__name__, date_str)
+        if hasattr(self, 'model') and self.model is not None:
+            filename = "%s-%s" % (self.model.__name__, date_str)
+        else:
+            # If self.model doesn't exist, use app_label and export_type
+            if app_label and export_type:
+                filename = "%s_%s_%s" % (app_label, export_type, date_str)
+            else:
+                raise ValueError(
+                    "Either self.model must exist, or app_label and export_type must be provided.")
         return filename
 
     def get_app_list(self, app_label=None):
@@ -163,11 +178,14 @@ class AdminExportHelper:
         if issubclass(model_cls, ListModelMixin):
             exclude = True
         intermediate_model = model_cls._meta.verbose_name.endswith(
-            'relationship')
+            'relationship') or model_cls._meta.verbose_name.startswith(
+            'historical')
         if intermediate_model:
             exclude = True
         return exclude
 
     def remove_exclude_models(self, app_list):
-        app_list = {key: value._meta.label_lower for key, value in app_list.items() if not self.exclude_rel_models(value)}
+        app_list = {key: value._meta.label_lower for key,
+                    value in app_list.items() if not self.exclude_rel_models(value)}
         return app_list
+
