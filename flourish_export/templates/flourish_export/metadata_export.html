@@ -1,0 +1,54 @@
+<div class="panel panel-default panel-table">
+  <div class="panel-heading">
+    <div class="row">
+      <div class="col col-xs-6">
+        <h3 class="panel-title">Metadata Export</h3>
+      </div>
+      <div class="col col-xs-6 text-right">
+      	<a id="download_td_files" title="Generate all Export" class="btn btn-sm btn-primary btn-download" role="button" 
+	        href="{% url 'flourish_export:home_url' %}?download=6">
+	            <i class="fa fa-plus fa-sm"></i> Generate Export
+	    </a>
+      </div>
+    </div>
+  </div>
+  <div class="panel-body">
+ 	{% if metadata_exports %}
+    <table id="metadata_export" class="table table-striped table-bordered table-list">
+		<thead>
+			<tr>
+				<th>Export identifier</th>
+				<th>Document</th>
+				<th>Report data range</th>
+				<th>Datetime generated</th>
+			</tr>
+		</thead>
+		<tfoot>
+			<tr>
+				<th>Export identifier</th>
+				<th>Document</th>
+				<th>Report data range</th>
+				<th>Datetime generated</th>
+			</tr>
+		</tfoot>
+		<tbody>
+		{% for metadata_download in metadata_exports %}
+			<tr>
+				<td>{{ metadata_download.export_identifier }}</td>
+				<td>{% if metadata_download.doc_url %}
+				   <a href={{ metadata_download.doc_url }}><i class="fa fa-download fa-sm"></i> file download</a>
+				{% else %}
+				    Pending.. 
+				{% endif %}</td>
+		 		<td>{{ metadata_download.start_date }} - {{ metadata_download.end_date }}</td>
+		 		<td>{{ metadata_download.uploaded_at }}</td>
+			</tr>
+		{% endfor %}
+		</tbody>
+	</table>
+	{% else %}
+		<p>No generated files yet</p>
+	{% endif %}
+  </div>
+
+</div>
