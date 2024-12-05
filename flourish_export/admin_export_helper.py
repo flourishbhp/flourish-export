@@ -13,9 +13,16 @@ class AdminExportHelper:
     """ Flourish export methods to be re-used in the export model admin mixin.
     """
 
+    audit_fields = ['user_created', 'user_modified', 'created', 'modified', ]
+
     exclude_fields = ['_state', 'hostname_created', 'hostname_modified',
                       'revision', 'device_created', 'device_modified', 'id',
-                      'site_id', 'modified', 'form_as_json', 'slug', ]
+                      'site_id', 'modified', 'form_as_json', 'slug',
+                      'consent_version', 'consent_model', 'subject_identifier_as_pk',
+                      'subject_identifier_aka']
+
+    action_item_fields = ['action_identifier', 'tracking_identifier',
+                          'related_tracking_identifier', 'parent_tracking_identifier']
 
     @property
     def get_model_fields(self):
@@ -175,9 +182,10 @@ class AdminExportHelper:
         # Check model class is m2m, skip
         if issubclass(model_cls, ListModelMixin):
             exclude = True
-        intermediate_model = model_cls._meta.verbose_name.endswith(
-            'relationship') or model_cls._meta.verbose_name.startswith(
-            'historical')
+        model_cls_name = model_cls._meta.verbose_name
+        intermediate_model = model_cls_name.endswith(
+            'relationship') or model_cls_name.startswith(
+                'historical') or model_cls_name.endswith('mixin')
         if intermediate_model:
             exclude = True
         return exclude
