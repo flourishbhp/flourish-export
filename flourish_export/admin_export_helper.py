@@ -13,9 +13,16 @@ class AdminExportHelper:
     """ Flourish export methods to be re-used in the export model admin mixin.
     """
 
+    audit_fields = ['user_created', 'user_modified', 'created', 'modified', ]
+
     exclude_fields = ['_state', 'hostname_created', 'hostname_modified',
                       'revision', 'device_created', 'device_modified', 'id',
-                      'site_id', 'modified', 'form_as_json', 'slug', ]
+                      'site_id', 'modified', 'form_as_json', 'slug',
+                      'consent_version', 'consent_model', 'subject_identifier_as_pk',
+                      'subject_identifier_aka']
+
+    action_item_fields = ['action_identifier', 'tracking_identifier',
+                          'related_tracking_identifier', 'parent_tracking_identifier']
 
     @property
     def get_model_fields(self):
@@ -82,8 +89,6 @@ class AdminExportHelper:
         df = pd.DataFrame(records)
         sheet_name = f'{export_type}' if export_type else f'{self.model.__name__}'
         df.to_excel(writer, sheet_name=sheet_name, index=False)
-        
-
 
         # Save and close the workbook
         writer.close()
@@ -158,7 +163,7 @@ class AdminExportHelper:
     def get_app_list(self, app_label=None):
         """ Returns all models registered to a specific app_label
             @param app_label: installed app label
-            @return: list of all registered models 
+            @return: list of all registered models
         """
         try:
             app_config = django_apps.get_app_config(app_label)
@@ -177,9 +182,12 @@ class AdminExportHelper:
         # Check model class is m2m, skip
         if issubclass(model_cls, ListModelMixin):
             exclude = True
-        intermediate_model = model_cls._meta.verbose_name.endswith(
-            'relationship') or model_cls._meta.verbose_name.startswith(
-            'historical')
+
+        model_cls_name = model_cls._meta.verbose_name
+        intermediate_model = model_cls_name.endswith(
+            'relationship') or model_cls_name.startswith(
+                'historical') or model_cls_name.endswith('mixin')
+
         if intermediate_model:
             exclude = True
         return exclude
@@ -188,4 +196,3 @@ class AdminExportHelper:
         app_list = {key: value._meta.label_lower for key,
                     value in app_list.items() if not self.exclude_rel_models(value)}
         return app_list
-

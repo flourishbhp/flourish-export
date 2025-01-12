@@ -1,5 +1,7 @@
 import re
+import django_rq
 
+from rq import Retry
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -77,8 +79,19 @@ class ListBoardView(NavbarViewMixin, EdcBaseViewMixin, ExportMethodsViewMixin,
         except ExportFile.DoesNotExist:
             export_identifier = self.create_export_obj(
                 app_label='flourish', description='Flourish All Export')
-            generate_exports.delay(app_list, True, True, user_emails,
-                                   export_identifier)
+
+            queue = django_rq.get_queue('full_exports')
+            queue.enqueue(
+                generate_exports,
+                app_list=app_list,
+                create_zip=True,
+                full_export=True,
+                user_emails=user_emails,
+                export_identifier=export_identifier,
+                queue_name='full_exports',
+                retry=Retry(max=5),  # Retry failed tasks up to 5 times
+            )
+
             message = (
                 f'Full flourish data export has been '
                 'initiated, an email will be sent once download completes.')

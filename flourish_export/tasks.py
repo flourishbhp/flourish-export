@@ -1,12 +1,22 @@
 import shutil
 import os
+
+import logging
+import pandas as pd
+import redis
+import re
+import django_rq
+from rq import Retry
+
 from celery import shared_task, group, chain
 from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as django_apps
 from django.core.mail import send_mail
 from django.conf import settings
+from django.db.models.fields.related import (ForeignKey, ManyToManyField,
+                                             ManyToOneRel, OneToOneRel)
 from edc_base.utils import get_utcnow
-import logging
+
 from flourish_caregiver.admin_site import flourish_caregiver_admin
 from flourish_child.admin_site import flourish_child_admin
 from flourish_facet.admin_site import flourish_facet_admin
@@ -14,6 +24,9 @@ from flourish_prn.admin_site import flourish_prn_admin
 
 from .admin_export_helper import AdminExportHelper
 from .models import ExportFile
+
+
+r = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 admin_export_helper_cls = AdminExportHelper()
 logger = logging.getLogger('celery_progress')
@@ -23,7 +36,7 @@ admin_site_map = {'flourish_child': flourish_child_admin,
                   'flourish_prn': flourish_prn_admin,
                   'flourish_facet': flourish_facet_admin}
 
-@shared_task
+
 def run_exports(model_cls, app_label, full_export=False):
     """ Executes the csv model export method from admin export action(s) and writes response
         content to an excel file.
@@ -40,71 +53,212 @@ def run_exports(model_cls, app_label, full_export=False):
 
     if not model_admin_cls:
         print(f'Model class not registered {model_cls._meta.verbose_name}')
+        return
     elif not queryset.exists():
         print(f'Empty queryset returned for {model_cls._meta.verbose_name}')
-    else:
-        file_path = f'media/admin_exports/{app_label}_{get_utcnow().date()}'
+        return
 
-        if full_export:
-            file_path = f'media/admin_exports/flourish_{get_utcnow().date()}'
+    file_path = f'media/admin_exports/{app_label}_{get_utcnow().date()}'
 
-        if hasattr(model_admin_cls, 'export_as_csv'):
-            """
+    if full_export:
+        file_path = f'media/admin_exports/flourish_{get_utcnow().date()}'
+
+    if hasattr(model_admin_cls, 'export_as_csv'):
+        """
             Can be used to exclude some models not needed in the exports
             by excluding the mixin from the model admin of interest
-            """
-            response = model_admin_cls.export_as_csv(
-                request=None, queryset=queryset)
+        """
 
-            if response:
-                if response.status_code == 200:
-                    filename = f'{file_path}/{model_admin_cls.get_export_filename()}'
-                    save_csv_to_file(response, filename)
-                else:
-                    response.raise_for_status()
+        response = model_admin_cls.export_as_csv(
+            request=None, queryset=queryset)
+
+        if response:
+            if response.status_code == 200:
+                filename = f'{file_path}/{model_admin_cls.get_export_filename()}'
+                save_csv_to_file(response, filename)
             else:
-                print(f'Empty response returned for {model_cls._meta.verbose_name}')
+                response.raise_for_status()
+        else:
+            print(f'Empty response for batch in {model_cls._meta.verbose_name}')
+    else:
+        print(f'No export method available for {model_cls._meta.verbose_name}')
+
+
+@shared_task()
+def run_metadata_exports(label_lower, filename, app_label):
+    app_admin_site = admin_site_map.get(app_label, None)
+
+    if not label_lower and not filename:
+        return
+
+    sheet_name = label_lower.split('.')[1]
+    sheet_name = re.sub(r'[\\/*?:"<>|]', '_', sheet_name)
+    sheet_name = sheet_name[:30]
+    records = []
+
+    model_cls = django_apps.get_model(label_lower)
+    model_admin_cls = app_admin_site._registry.get(model_cls, None)
+
+    exclude_fields = getattr(
+        model_admin_cls, 'exclude_fields', []) + admin_export_helper_cls.exclude_fields
+    custom_form_labels = []
+    if model_admin_cls:
+        custom_form_labels = getattr(
+            model_admin_cls, 'custom_form_labels', [])
+
+    form_fields = model_cls._meta.get_fields()
+
+    audit_fields = []
+
+    for field in form_fields:
+        if field.name in exclude_fields:
+            continue
+        if field.name in admin_export_helper_cls.audit_fields:
+            audit_fields.append(field)
+            continue
+        if isinstance(field, (ForeignKey, ManyToOneRel, OneToOneRel, )):
+            continue
+        append_field_details(records, field, custom_form_labels)
+
+    for field in audit_fields:
+        append_field_details(records, field, custom_form_labels)
+
+    # Ensure directory exists, or create it
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    df = pd.DataFrame(records)
+
+    lock = r.lock(f'{filename}_lock', timeout=30)
+    if lock.acquire(blocking=True):
+        try:
+            # Check if the file exists
+            if not os.path.exists(filename):
+                # If the file doesn't exist, create it and write the DataFrame to a new sheet
+                with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+            else:
+                # Write data to excel file
+                with pd.ExcelWriter(filename, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+                    if sheet_name in writer.sheets:
+                        df.to_excel(writer, sheet_name=sheet_name, index=False, header=False,
+                                    startrow=writer.sheets[sheet_name].max_row)
+                    else:
+                        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        finally:
+            lock.release()
+    else:
+        print('Could not acquire lock for the file.')
+
+
+def append_field_details(records, field, custom_form_labels):
+    choices = None
+
+    if isinstance(field, ManyToManyField):
+        related_model_cls = field.related_model
+        _qs = related_model_cls.objects.all()
+        choices = [(qs.short_name, qs.name) for qs in _qs]
+
+    custom_field_label = ''
+    for custom_label in custom_form_labels:
+        custom_field = getattr(custom_label, 'field', None)
+        _custom_field_label = getattr(custom_label, 'label', None)
+
+        if custom_field == field.name:
+            custom_field_label = _custom_field_label
+            break
+
+    try:
+        records.append({'Variable Name': field.name,
+                        'Variable Label Baseline': field.verbose_name,
+                        'Variable Label FollowUp': custom_field_label,
+                        'Field Type': field.get_internal_type(),
+                        'Choices': field.flatchoices or choices,
+                        'Max Length': field.max_length,
+                        'Nullable': field.null,
+                        'Blank': field.blank,
+                        'Editable': field.editable})
+    except AttributeError:
+        pass
+    return records
+
+
+def generate_exports(app_list, create_zip=False, full_export=False,
+                     flat_exports=None, user_emails=[], export_identifier=None,
+                     queue_name='exports'):
+
+    app_labels = set()
+    _queue = django_rq.get_queue(queue_name)
+    # Create a list to store the group of export tasks
+    export_tasks = []
+
+    for model_cls in app_list.values():
+        app_label = model_cls.split('.')[0]
+        app_labels.add(app_label)
+        if not flat_exports:
+            # Chunking logic for large exports
+            _job = _queue.enqueue(
+                run_exports,
+                model_cls,
+                app_label,
+                full_export,
+                retry=Retry(max=3)
+            )
+            export_tasks.append(_job)
+
+    # Change app_labels to list for serialization
+    app_labels = list(app_labels) if not full_export else ['flourish', ]
+
+    # Wait for all export tasks to complete
+    if flat_exports:
+        _task = _queue.enqueue(
+            generate_flat_exports,
+            app_list,
+            app_labels,
+            create_zip
+        )
+        _task.result  # Blocks until the task is completed
+
+    else:
+        for task in export_tasks:
+            task.result
+
+    # Handle post-export operations (i.e. zip and send email notification)
+    if create_zip:
+        _queue.enqueue(
+            zip_and_send_email,
+            app_labels,
+            user_emails,
+            export_identifier
+        )
 
 
 @shared_task(bind=True, soft_time_limit=21000, time_limit=21600)
-def generate_exports(self, app_list, create_zip=False, full_export=False, flat_exports=None, user_emails=[],
-                     export_identifier=None):
-
-    app_labels = set()
-
-    # Create a list to store the group of export tasks
+def generate_metadata(self, app_labels, user_emails, export_identifier):
     export_tasks = []
-    try:
-        for _, model_cls in app_list.items():
-            app_label = model_cls.split('.')[0]
-            app_labels.add(app_label)
-            if not flat_exports:
-                # Call the export_data task asynchronously and store the task
-                export_tasks.append(run_exports.si(model_cls, app_label, full_export))
+    file_path = f'media/admin_exports/flourish_metadata_{get_utcnow().date()}'
 
-        # Group all export tasks together
+    # Check directory already exists and remove along with its contents
+    remove_existing_dir(file_path)
+
+    try:
+        for app_label in app_labels:
+            filename = f'{file_path}/{app_label}.xlsx'
+            app_models = admin_export_helper_cls.get_app_list(app_label).values()
+            for model_cls in app_models:
+                _exclude = admin_export_helper_cls.exclude_rel_models(model_cls)
+                if _exclude:
+                    continue
+                label_lower = model_cls._meta.label_lower
+                export_tasks.append(
+                    run_metadata_exports.si(label_lower, filename, app_label))
         export_group = group(export_tasks)
 
-        # Change app_labels to list for serialization
-        app_labels = list(app_labels) if not full_export else ['flourish', ]
-        # Chain additional task for zipping and sending an email after exports are complete.
+        final_chain = chain(export_group, zip_and_send_email_task.si(
+            ['flourish_metadata', ], user_emails, export_identifier))
 
-        if flat_exports:
-            if create_zip:
-                final_chain = chain(generate_flat_exports.si(app_list, app_labels, create_zip),
-                                    zip_and_send_email.si(app_labels, user_emails, export_identifier, flat_exports))
-            else:
-                final_chain = generate_flat_exports(app_list, app_labels, create_zip)
-            final_chain.delay()
-        else:
-            # Handle regular exports and their zipping/emailing
-            if create_zip:
-                final_chain = chain(export_group, zip_and_send_email.si(
-                    app_labels, user_emails, export_identifier))
-            else:
-                final_chain = export_group
-
-            final_chain.delay()
+        final_chain.delay()
     except SoftTimeLimitExceeded:
         self.update_state(state='FAILURE')
         new_soft_time_limit = self.request.soft_time_limit + 3600
@@ -113,7 +267,6 @@ def generate_exports(self, app_list, create_zip=False, full_export=False, flat_e
                    soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
 
 
-@shared_task
 def generate_flat_exports(app_list, app_labels, create_zip=False):
     for app_label in app_labels:
         file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
@@ -145,17 +298,20 @@ def generate_flat_exports(app_list, app_labels, create_zip=False):
                     model_groups[partipant_type][subject_identifier] = {}
                 model_groups[partipant_type][subject_identifier].update(record)
 
+        write_function = (admin_export_helper_cls.write_to_csv
+                          if create_zip else admin_export_helper_cls.write_to_excel)
 
-        write_function = admin_export_helper_cls.write_to_csv if create_zip else admin_export_helper_cls.write_to_excel
-
-        for export_type, participant_data in model_groups.items():     
+        for export_type, participant_data in model_groups.items():
             flat_participant_data = participant_data.values()
 
             if flat_participant_data:
-                flat_participant_data = remove_duplicate_fields(flat_participant_data, suffix_list)
-                filename = f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,export_type)}'
+                flat_participant_data = remove_duplicate_fields(
+                    flat_participant_data, suffix_list)
+                filename = (
+                    f'{file_path}/{admin_export_helper_cls.get_export_filename(app_label,export_type)}')
                 response = write_function(records=flat_participant_data,
-                                            app_label=app_label, export_type=export_type)
+                                          app_label=app_label,
+                                          export_type=export_type)
 
                 if response and response.status_code == 200:
                     save_csv_to_file(response, filename)
@@ -164,6 +320,11 @@ def generate_flat_exports(app_list, app_labels, create_zip=False):
 
 
 @shared_task
+def zip_and_send_email_task(app_labels, user_emails, export_identifier, flat_exports=None):
+    for app_label in app_labels:
+        create_zip_and_email(app_label, export_identifier, user_emails, flat_exports)
+
+
 def zip_and_send_email(app_labels, user_emails, export_identifier, flat_exports=None):
     for app_label in app_labels:
         create_zip_and_email(app_label, export_identifier, user_emails, flat_exports)
@@ -217,6 +378,7 @@ def save_csv_to_file(response, filename):
     with open(f'{filename}.{file_ext}', 'wb') as file:
         file.write(response.content)
 
+
 def remove_duplicate_fields(records, suffix_list):
     # Loop over each record in flat_participant_data
     for record in records:
@@ -242,3 +404,11 @@ def remove_duplicate_fields(records, suffix_list):
             del record[key]
 
     return records
+
+
+def remove_existing_dir(file_path):
+    if os.path.exists(file_path) and os.path.isdir(file_path):
+        shutil.rmtree(file_path)
+        print(f'The directory {file_path} has been deleted')
+    else:
+        print(f'The directory {file_path} does not exist')
