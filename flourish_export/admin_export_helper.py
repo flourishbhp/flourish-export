@@ -182,10 +182,12 @@ class AdminExportHelper:
         # Check model class is m2m, skip
         if issubclass(model_cls, ListModelMixin):
             exclude = True
+
         model_cls_name = model_cls._meta.verbose_name
         intermediate_model = model_cls_name.endswith(
             'relationship') or model_cls_name.startswith(
                 'historical') or model_cls_name.endswith('mixin')
+
         if intermediate_model:
             exclude = True
         return exclude
@@ -194,4 +196,3 @@ class AdminExportHelper:
         app_list = {key: value._meta.label_lower for key,
                     value in app_list.items() if not self.exclude_rel_models(value)}
         return app_list
-

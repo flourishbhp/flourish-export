@@ -1,11 +1,13 @@
 import shutil
 import os
+
 import logging
 import pandas as pd
 import redis
 import re
 import django_rq
 from rq import Retry
+
 from celery import shared_task, group, chain
 from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as django_apps
@@ -14,6 +16,7 @@ from django.conf import settings
 from django.db.models.fields.related import (ForeignKey, ManyToManyField,
                                              ManyToOneRel, OneToOneRel)
 from edc_base.utils import get_utcnow
+
 from flourish_caregiver.admin_site import flourish_caregiver_admin
 from flourish_child.admin_site import flourish_child_admin
 from flourish_facet.admin_site import flourish_facet_admin
@@ -256,7 +259,6 @@ def generate_metadata(self, app_labels, user_emails, export_identifier):
             ['flourish_metadata', ], user_emails, export_identifier))
 
         final_chain.delay()
-
     except SoftTimeLimitExceeded:
         self.update_state(state='FAILURE')
         new_soft_time_limit = self.request.soft_time_limit + 3600
