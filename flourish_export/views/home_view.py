@@ -24,12 +24,18 @@ class HomeView(ExportMethodsViewMixin,
 
         download = self.request.GET.get('download')
 
+        app_labels = ['flourish_caregiver', 'flourish_child', 'flourish_prn']
+
         if download == '3':
             self.generate_export(app_label='flourish_caregiver')
         elif download == '4':
             self.generate_export(app_label='flourish_child')
         elif download == '5':
             self.generate_export(app_label='flourish_prn')
+        elif download == '6':
+            self.generate_apps_metadata(app_label='flourish',
+                                        app_labels=app_labels,
+                                        description='Flourish Metadata Export(s)')
 
         caregiver_crf_exports = ExportFile.objects.filter(
             description='Flourish Caregiver Export(s)').order_by('-uploaded_at')[:10]
@@ -39,8 +45,13 @@ class HomeView(ExportMethodsViewMixin,
 
         prn_exports = ExportFile.objects.filter(
             description='Flourish PRN Export(s)').order_by('-uploaded_at')[:10]
+
+        metadata_exports = ExportFile.objects.filter(
+            description='Flourish Metadata Export(s)').order_by('-uploaded_at')[:10]
+
         context.update(
             caregiver_crf_exports=caregiver_crf_exports,
             child_crf_exports=child_crf_exports,
-            prn_exports=prn_exports)
+            prn_exports=prn_exports,
+            metadata_exports=metadata_exports)
         return context
