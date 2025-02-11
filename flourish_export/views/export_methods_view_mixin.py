@@ -3,6 +3,8 @@ from redis import Redis
 from rq import Retry
 from django.contrib import messages
 
+from ..admin_export_helper import AdminExportHelper
+from ..identifiers import ExportIdentifier
 from ..models import ExportFile
 from ..tasks import generate_metadata, generate_exports
 
@@ -10,6 +12,9 @@ redis_client = Redis(host='localhost', port=6379, db=0)
 
 
 class ExportMethodsViewMixin:
+
+    admin_helper_cls = AdminExportHelper
+    export_identifier_cls = ExportIdentifier
 
     def create_export_obj(self, app_label, description=None):
         export_identifier = self.export_identifier_cls().identifier
@@ -35,6 +40,7 @@ class ExportMethodsViewMixin:
 
     def generate_apps_metadata(
             self, app_label, user_emails=[], app_labels=[], description=None):
+        request = getattr(self, 'request', None)
         user_emails = user_emails or [self.request.user.email]
 
         export_identifier = self.get_or_create_export_file(app_label, description)
@@ -46,14 +52,18 @@ class ExportMethodsViewMixin:
         else:
             message = ('Download for Metadata export that was initiated is still'
                        ' running. Please wait until an export is fully prepared.')
-        messages.add_message(self.request, messages.INFO, message)
+        if request:
+            messages.add_message(request, messages.INFO, message)
+        else:
+            print(message)
 
     def generate_export(
             self, app_label, user_emails=[], flat_exports=False, description=None):
+        request = getattr(self, 'request', None)
 
         app_list = self.admin_helper_cls().get_app_list(app_label)
         app_list = self.admin_helper_cls().remove_exclude_models(app_list)
-        user_emails = user_emails or [self.request.user.email]
+        user_emails = user_emails or [request.user.email]
 
         description = description or f'{app_label.replace("_", " ").title()} Export(s)'
         export_identifier = self.get_or_create_export_file(app_label, description)
@@ -62,7 +72,10 @@ class ExportMethodsViewMixin:
             message = (f'Download for {app_label.replace("_", " ").capitalize()} '
                        'that was initiated is still running. Please wait until an '
                        'export is fully prepared.')
-            messages.add_message(self.request, messages.INFO, message)
+            if request:
+                messages.add_message(request, messages.INFO, message)
+            else:
+                print(message)
             return
 
         queue = django_rq.get_queue('exports')
@@ -81,4 +94,7 @@ class ExportMethodsViewMixin:
             f'{app_label.replace("_", " ").capitalize()} export has been '
             f'initiated. Job ID: {job.id}. An email will be sent once '
             'download completes.')
-        messages.add_message(self.request, messages.INFO, message)
+        if request:
+            messages.add_message(request, messages.INFO, message)
+        else:
+            print(message)
