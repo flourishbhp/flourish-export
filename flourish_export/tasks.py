@@ -37,7 +37,7 @@ admin_site_map = {'flourish_child': flourish_child_admin,
                   'flourish_facet': flourish_facet_admin}
 
 
-def run_exports(model_cls, app_label, full_export=False):
+def run_exports(model_cls, app_label, export_date, full_export=False):
     """ Executes the csv model export method from admin export action(s) and writes response
         content to an excel file.
         @param model_cls: Specific model class definition
@@ -58,10 +58,10 @@ def run_exports(model_cls, app_label, full_export=False):
         print(f'Empty queryset returned for {model_cls._meta.verbose_name}')
         return
 
-    file_path = f'media/admin_exports/{app_label}_{get_utcnow().date()}'
+    file_path = f'media/admin_exports/{app_label}_{export_date}'
 
     if full_export:
-        file_path = f'media/admin_exports/flourish_{get_utcnow().date()}'
+        file_path = f'media/admin_exports/flourish_{export_date}'
 
     if hasattr(model_admin_cls, 'export_as_csv'):
         """
@@ -193,6 +193,8 @@ def generate_exports(app_list, create_zip=False, full_export=False,
     # Create a list to store the group of export tasks
     export_tasks = []
 
+    export_date = get_utcnow().strftime('%Y-%m-%d_%H-%M-%S')
+
     for model_cls in app_list.values():
         app_label = model_cls.split('.')[0]
         app_labels.add(app_label)
@@ -202,6 +204,7 @@ def generate_exports(app_list, create_zip=False, full_export=False,
                 run_exports,
                 model_cls,
                 app_label,
+                export_date,
                 full_export,
                 retry=Retry(max=3)
             )
@@ -216,7 +219,8 @@ def generate_exports(app_list, create_zip=False, full_export=False,
             generate_flat_exports,
             app_list,
             app_labels,
-            create_zip
+            create_zip,
+            export_date
         )
         _task.result  # Blocks until the task is completed
 
@@ -230,7 +234,8 @@ def generate_exports(app_list, create_zip=False, full_export=False,
             zip_and_send_email,
             app_labels,
             user_emails,
-            export_identifier
+            export_identifier,
+            export_date
         )
 
 
@@ -267,9 +272,9 @@ def generate_metadata(self, app_labels, user_emails, export_identifier):
                    soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
 
 
-def generate_flat_exports(app_list, app_labels, create_zip=False):
+def generate_flat_exports(app_list, app_labels, create_zip=False, export_date):
     for app_label in app_labels:
-        file_path = f'media/admin_exports/{app_label}_flat_{get_utcnow().date()}'
+        file_path = f'media/admin_exports/{app_label}_flat_{export_date}'
         response = None
         suffix_list = ['_subject_identifier', '_hiv_status', '_study_status']
         model_groups = {
@@ -325,16 +330,19 @@ def zip_and_send_email_task(app_labels, user_emails, export_identifier, flat_exp
         create_zip_and_email(app_label, export_identifier, user_emails, flat_exports)
 
 
-def zip_and_send_email(app_labels, user_emails, export_identifier, flat_exports=None):
+def zip_and_send_email(app_labels, user_emails, export_identifier,
+                       flat_exports=None, export_date):
     for app_label in app_labels:
-        create_zip_and_email(app_label, export_identifier, user_emails, flat_exports)
+        create_zip_and_email(
+            app_label, export_identifier, user_emails, flat_exports, export_date)
 
 
-def create_zip_and_email(app_label, export_identifier, user_emails, flat_exports=None):
+def create_zip_and_email(app_label, export_identifier,
+                         user_emails, flat_exports=None, export_date):
     if flat_exports:
-        zip_folder = f'admin_exports/{app_label}_flat_{get_utcnow().date()}'
+        zip_folder = f'admin_exports/{app_label}_flat_{export_date}'
     else:
-        zip_folder = f'admin_exports/{app_label}_{get_utcnow().date()}'
+        zip_folder = f'admin_exports/{app_label}_{export_date}'
 
     dir_to_zip = f'{settings.MEDIA_ROOT}/{zip_folder}'
     archive_name = f'{dir_to_zip}_{export_identifier}'
