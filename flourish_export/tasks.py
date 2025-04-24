@@ -219,8 +219,8 @@ def generate_exports(app_list, create_zip=False, full_export=False,
             generate_flat_exports,
             app_list,
             app_labels,
+            export_date,
             create_zip,
-            export_date
         )
         _task.result  # Blocks until the task is completed
 
@@ -234,8 +234,8 @@ def generate_exports(app_list, create_zip=False, full_export=False,
             zip_and_send_email,
             app_labels,
             user_emails,
-            export_identifier,
-            export_date
+            export_date,
+            export_identifier
         )
 
 
@@ -272,7 +272,7 @@ def generate_metadata(self, app_labels, user_emails, export_identifier):
                    soft_time_limit=new_soft_time_limit, time_limit=new_time_limit)
 
 
-def generate_flat_exports(app_list, app_labels, create_zip=False, export_date):
+def generate_flat_exports(app_list, app_labels, export_date, create_zip=False):
     for app_label in app_labels:
         file_path = f'media/admin_exports/{app_label}_flat_{export_date}'
         response = None
@@ -331,14 +331,14 @@ def zip_and_send_email_task(app_labels, user_emails, export_identifier, flat_exp
 
 
 def zip_and_send_email(app_labels, user_emails, export_identifier,
-                       flat_exports=None, export_date):
+                       export_date, flat_exports=None):
     for app_label in app_labels:
         create_zip_and_email(
-            app_label, export_identifier, user_emails, flat_exports, export_date)
+            app_label, export_identifier, user_emails, export_date, flat_exports)
 
 
 def create_zip_and_email(app_label, export_identifier,
-                         user_emails, flat_exports=None, export_date):
+                         user_emails, export_date, flat_exports=None):
     if flat_exports:
         zip_folder = f'admin_exports/{app_label}_flat_{export_date}'
     else:
