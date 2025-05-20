@@ -234,8 +234,8 @@ def generate_exports(app_list, create_zip=False, full_export=False,
             zip_and_send_email,
             app_labels,
             user_emails,
-            export_date,
-            export_identifier
+            export_identifier,
+            export_date
         )
 
 
