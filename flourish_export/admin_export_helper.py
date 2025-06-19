@@ -190,6 +190,10 @@ class AdminExportHelper:
 
         if intermediate_model:
             exclude = True
+
+        # Remove locator CRF: contains identifiable information
+        if model_cls._meta.model_name == 'caregiverlocator':
+            exclude = True
         return exclude
 
     def remove_exclude_models(self, app_list):
